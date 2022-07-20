@@ -196,31 +196,35 @@ const codeBlock = (startUID) => {
   });
 };
 
-// you can expose it to the Roam Command Palette
-window.roamAlphaAPI.ui.commandPalette.addCommand({
-  label: "Universal Dropdown",
-  callback: () => {
-    const startUID = window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"];
-    codeBlock(startUID);
-  }
-})
+export default {
+  onload: () => {
+    // you can expose it to the Roam Command Palette
+    window.roamAlphaAPI.ui.commandPalette.addCommand({
+      label: "Universal Dropdown",
+      callback: () => {
+        const startUID = window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"];
+        codeBlock(startUID);
+      }
+    })
 
-// or even register as a smartblock
-const args = {
-  text: 'UNIVERSALDROPDOWN',
-  help: "What does this do?",
-  handler: (context) => () => {
-    const startUID = context.targetUid;
-    codeBlock(startUID);
-  },
-}
-if (window.roamjs?.extension?.smartblocks) {
-  window.roamjs.extension.smartblocks.registerCommand(args);
-} else {
-  document.body.addEventListener(
-    `roamjs:smartblocks:loaded`,
-    () =>
-      window.roamjs?.extension.smartblocks &&
-      window.roamjs.extension.smartblocks.registerCommand(args)
-  );
+    // or even register as a smartblock
+    const args = {
+      text: 'UNIVERSALDROPDOWN',
+      help: "What does this do?",
+      handler: (context) => () => {
+        const startUID = context.targetUid;
+        codeBlock(startUID);
+      },
+    }
+    if (window.roamjs?.extension?.smartblocks) {
+      window.roamjs.extension.smartblocks.registerCommand(args);
+    } else {
+      document.body.addEventListener(
+        `roamjs:smartblocks:loaded`,
+        () =>
+          window.roamjs?.extension.smartblocks &&
+          window.roamjs.extension.smartblocks.registerCommand(args)
+      );
+    }
+  }
 }
