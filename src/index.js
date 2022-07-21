@@ -1,3 +1,8 @@
+import {
+  BlockInput,
+  MenuItemSelect
+} from "roamjs-components/components";
+
 const codeBlock = (startUID) => {
   // <%CURRENTBLOCKREF:startUID%><%CURRENTBLOCKCONTENT:c%><%NOBLOCKOUTPUT%>
   const c = window.roamAlphaAPI.pull(
@@ -7,7 +12,6 @@ const codeBlock = (startUID) => {
   
   // <%SET:buttonIcon,🔽%><%NOBLOCKOUTPUT%>
   let buttonIcon = '🔽';
-
   // <%IFTRUE:<%HAS:multi%>!=true%><%SET:multi,false%>
   const multi = false;
 
@@ -226,5 +230,9 @@ export default {
           window.roamjs.extension.smartblocks.registerCommand(args)
       );
     }
+    console.log('Universal Dropdown loaded.');
+  },
+  onunload: () => {
+    console.log('Universal Dropdown unloaded');
   }
-}
+};

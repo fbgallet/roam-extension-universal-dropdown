@@ -1,5 +1,8 @@
 {
   "devDependencies": {
     "roamjs-scripts": "^0.20.7"
+  },
+  "dependencies": {
+    "roamjs-components": "^0.70.1"
   }
 }
