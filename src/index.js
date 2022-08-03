@@ -126,8 +126,11 @@ function getButtonPosition(left) {
 }
 
 function normalizeUid(uid) {
-  if (uid.includes('((')) return uid.slice(2,-2);
-  return uid;
+  if (uid.length==13) {
+    if (uid.includes('((') && uid.includes('))')) return uid.slice(2,-2);
+  }
+  if (uid.length==9) return uid;
+  return undefined;
 }
 
 function normalizeTitle(str) {
@@ -140,7 +143,6 @@ function currentBlockAttributeName(uid) {
     let attribute = blockContent.split('::');
     if (attribute[0].includes("`")==false) return attribute[0];
   } 
-  console.log("no attribute in this block");
   return '';
 }
 
@@ -227,30 +229,29 @@ function removeSelectorButtonFromContent(s) {
 }
 
 export default {
-  onload: () => {
-    // you can expose it to the Roam Command Palette
+  onload:  () => {
     window.roamAlphaAPI.ui.commandPalette.addCommand({
-      label: "Universal Dropdown",
-      callback: () => {
-        const startUid = window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"];
-        //codeBlock(startUid);
+      label: "Universal Selector",
+      callback: async () => {
+        /*let caretPos = document.activeElement.selectionStart;
+        left = blockContent.substring(0,caretPos);
+        right = blockContent.slice(caretPos);*/
+        startUid = window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"];
+        var clipboard = await navigator.clipboard.readText();
+        let blockref = normalizeUid(clipboard);
+        if (clipboard.includes('::')) attribute = clipboard.replace('::','');
+        else attribute = undefined;
+        window.roamjs.extension.smartblocks.triggerSmartblock({
+          srcName: 'Universal Selector',
+          targetUid: startUid,
+          variables: {blockref: blockref, attribute: attribute}
+        });
       }
     })
 
-    // or even register as a smartblock
-
-    window.roamjs.extension.smartblocks.registerCommand({
-      text: 'INSERTITEMSELECTED',
-      help: "This command cannot be used separately, it is a part of the Universal Selector workflow.",
-      handler: (context) => () => {
-          insertItemInBlock(context.variables.uid, context.variables.item);
-          return '';
-        },
-      });
-
     const listCmd = {
       text: 'LISTSELECTOR',
-      help: "Open an input dropdown with the list of children of a given block. 1. uid of the parent block",
+      help: "Open an input dropdown with the list of children of a given block. 1. uid of the parent block (optional if listUid is set in the workflow)",
       handler: (context) => () => {
         startUid = context.targetUid;
         listUid=normalizeUid(context.variables.listUid);
@@ -262,7 +263,7 @@ export default {
     }
     const attrCmd = {
       text: 'ATTRIBUTEVALUESELECTOR',
-      help: "Open an input dropdown with the list of existing values of a given attribute. 1. name of the attribute",
+      help: "Open an input dropdown with the list of existing values of a given attribute. 1. name of the attribute (optional if attribute is set in the workflow",
       handler: (context) => () => {
         startUid = context.targetUid;
         attribute = normalizeTitle(context.variables.attribute);
@@ -293,9 +294,9 @@ export default {
           window.roamjs.extension.smartblocks.registerCommand(insertCmd)
       );
     }
-    console.log('Universal Dropdown loaded.');
+    console.log('Universal Selector loaded.');
   },
   onunload: () => {
-    console.log('Universal Dropdown unloaded');
+    console.log('Universal Selector unloaded.');
   }
 };
