@@ -2,6 +2,8 @@
 
 ⚠️ This extension only works with 'Universal Selector' SmartBlocks: you need to install Smartblocks extension from RoamDepot first, then install 'Universal Selector' SmartBlocks from the SmartBlocks Store (open command palette with Ctrl-Cmd + P, then search for "SmartBlocks Store")
 
+![selector gif](https://user-images.githubusercontent.com/74436347/182655439-db3e444f-5bba-4154-8136-44314fa080d8.gif)
+
 Easily **turn any list in your graph into a drop-down list** or **select attribute value among existing values** !
 This extended Smartblocks create a button to open the drop-down list of values and change the inserted item at will. The list is populated from a specified block reference or from the current values linked to a given attribute (page name followed by `::` at the beginning of a block, e.g. `page::`).
 Once the button is inserted in some block (the most relevant is to copy it into a template), you will access to the list of values just in one click !
