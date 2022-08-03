@@ -1,1 +1,2 @@
-npx roamjs-scripts build --marketplace
+npm install
+npx roamjs-scripts build
