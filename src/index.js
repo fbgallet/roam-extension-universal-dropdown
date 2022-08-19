@@ -3,105 +3,112 @@
   MenuItemSelect
 } from "roamjs-components/components";*/
 
-var startUid, blockContent, listUid, attribute, multi, itemsArray, left, right, action;
-var listName = '';
-var buttonIcon = '🔽';
+var startUid,
+  blockContent,
+  listUid,
+  attribute,
+  multi,
+  itemsArray,
+  left,
+  right,
+  action;
+var listName = "";
+var buttonIcon = "🔽";
 var isAttributeBlock = false;
 
 function universalSelector(sbContext) {
-  left=sbContext.leftContent;
+  left = sbContext.leftContent;
   blockContent = getBlockContent(startUid);
-  right = blockContent.replace(left,'');
+  right = blockContent.replace(left, "");
   let currentAttr = currentBlockAttributeName(startUid);
-  if (currentAttr=='') {    
-    if (attribute=='currentAttribute') {
+  if (currentAttr == "") {
+    if (attribute == "currentAttribute") {
       console.log("This block is not an attribute!");
       return;
-    } 
-  }
-  else {
+    }
+  } else {
     isAttributeBlock = true;
-    if (attribute=='currentAttribute') attribute=currentAttr;
+    if (attribute == "currentAttribute") attribute = currentAttr;
   }
-  
-  if (typeof(sbContext.multi)!='undefined') multi=sbContext.multi;
-  else multi = 'false';
-  if (typeof(sbContext.action)=='undefined') action = 'Select a value';
+
+  if (typeof sbContext.multi != "undefined") multi = sbContext.multi;
+  else multi = "false";
+  if (typeof sbContext.action == "undefined") action = "Select a value";
   else action = sbContext.action;
-  if (action == 'Select a value') {
-    if (listUid!='') itemsArray = getItemsArray(listUid);
-    else itemsArray = getAttributeExistingValues(attribute,true);
+  if (action == "Select a value") {
+    if (listUid != "") itemsArray = getItemsArray(listUid);
+    else itemsArray = getAttributeExistingValues(attribute, true);
     let list = concatTabAsList(itemsArray);
-    sbInputBox(startUid,list); 
-  }
-  else {
-    insertItemInBlock(startUid,'');
+    sbInputBox(startUid, list);
+  } else {
+    insertItemInBlock(startUid, "");
   }
 }
 
 function sbInputBox(uid, l) {
-    window.roamjs.extension.smartblocks.triggerSmartblock({
-          srcName: '.Input list and insert item',
-          targetUid: uid,
-          variables: {list: l, uid: uid}
-    });
+  window.roamjs.extension.smartblocks.triggerSmartblock({
+    srcName: ".Input list and insert item",
+    targetUid: uid,
+    variables: { list: l, uid: uid },
+  });
 }
 
 function insertItemInBlock(uid, item) {
-  if (item.includes('(Text from:((')) {
-    item=item.slice(-14,-1);
+  if (item.includes("(Text from:((")) {
+    item = item.slice(-14, -1);
   }
   let buttonCaption = buttonIcon;
   let position = getButtonPosition(left);
-  if (position>1) {
-      buttonCaption += position;
+  if (position > 1) {
+    buttonCaption += position;
   }
-  let sbName = '';
-  let arg = '';
-  if (multi=='true') {
-    buttonCaption += '➕';
-    arg = 'multi=true,';
+  let sbName = "";
+  let arg = "";
+  if (multi == "true") {
+    buttonCaption += "➕";
+    arg = "multi=true,";
   }
   let currentItem;
-  if (listUid!='') {
-    sbName = 'List Selector';
-    arg += 'listUid=(('+listUid+'))';
-    if (action != 'Select a value') buttonCaption += ' ' + listName;
+  if (listUid != "") {
+    sbName = "List Selector";
+    arg += "listUid=((" + listUid + "))";
+    if (action != "Select a value") buttonCaption += " " + listName;
+  } else {
+    sbName = "Attribute values Selector";
+    arg += "attribute=" + attribute;
+    if (action != "Select a value") buttonCaption += " " + attribute;
   }
-  else { 
-    sbName = 'Attribute values Selector';
-    arg += 'attribute='+attribute; 
-    if (action != 'Select a value') buttonCaption += ' ' + attribute;
-  }
-  if (action == 'Select a value') {
-    if (multi != 'true') {
+  if (action == "Select a value") {
+    if (multi != "true") {
       currentItem = hasItem(itemsArray, right);
-      if (currentItem!=null) {
+      if (currentItem != null) {
         let index = right.indexOf(currentItem);
-        right = right.slice(index+currentItem.length);
+        right = right.slice(index + currentItem.length);
       }
     }
-    if (item=='New value') item='';
-    item = ' '+item;
+    if (item == "New value") item = "";
+    item = " " + item;
   }
 
-  let button = '{{'+ buttonCaption +':SmartBlock:' + sbName + ':' + arg + '}}';
+  let button =
+    "{{" + buttonCaption + ":SmartBlock:" + sbName + ":" + arg + "}}";
 
   window.roamAlphaAPI.updateBlock({
     block: {
-      uid: uid, 
-      string: left + button + item + right }
+      uid: uid,
+      string: left + button + item + right,
+    },
   });
-} 
+}
 
 function hasItem(listArray, right) {
   let str = right.trim();
-  for(let i=0; i<listArray.length; i++) {
-    let item=listArray[i];
-    if (item.includes('(Text from:((')) {
-      item=listArray[i].slice(-14,-1);
+  for (let i = 0; i < listArray.length; i++) {
+    let item = listArray[i];
+    if (item.includes("(Text from:((")) {
+      item = listArray[i].slice(-14, -1);
     }
-    if (str.indexOf(item)==0) {
+    if (str.indexOf(item) == 0) {
       return item;
     }
   }
@@ -113,37 +120,37 @@ function getItemsArray(uid) {
   return getItemsFromChildrenBlocks(blocks[0][0].children);
 }
 
-function getAttributeExistingValues(attribute,sorted=true) {
-  if (attribute.includes("[[")) attribute=attribute.slice(2,-2);
-  let blocks = getBlocksIncludingText(attribute + '::');
+function getAttributeExistingValues(attribute, sorted = true) {
+  if (attribute.includes("[[")) attribute = attribute.slice(2, -2);
+  let blocks = getBlocksIncludingText(attribute + "::");
   let valuesArray = getValuesFromAttributeBlocks(blocks);
   if (sorted) valuesArray = valuesArray.sort();
   return valuesArray;
 }
 
 function getButtonPosition(left) {
-  return left.split('{{'+buttonIcon).length;
+  return left.split("{{" + buttonIcon).length;
 }
 
 function normalizeUid(uid) {
-  if (uid.length==13) {
-    if (uid.includes('((') && uid.includes('))')) return uid.slice(2,-2);
+  if (uid.length == 13) {
+    if (uid.includes("((") && uid.includes("))")) return uid.slice(2, -2);
   }
-  if (uid.length==9) return uid;
+  if (uid.length == 9) return uid;
   return undefined;
 }
 
 function normalizeTitle(str) {
-  return str.replace(/[/\\|\[\]$:~()^\{\}"'*_`]/g,'');
+  return str.replace(/[/\\|\[\]$:~()^\{\}"'*_`]/g, "");
 }
 
 function currentBlockAttributeName(uid) {
   let blockContent = getBlockContent(uid);
-  if (blockContent.includes('::')) {
-    let attribute = blockContent.split('::');
-    if (attribute[0].includes("`")==false) return attribute[0];
-  } 
-  return '';
+  if (blockContent.includes("::")) {
+    let attribute = blockContent.split("::");
+    if (attribute[0].includes("`") == false) return attribute[0];
+  }
+  return "";
 }
 
 function getListName(listUid) {
@@ -160,25 +167,25 @@ function getChildrenTree(uid) {
 }
 
 function getBlockContent(uid) {
-  return window.roamAlphaAPI.pull(
-    "[:block/string]", 
-    [":block/uid", uid]
-  )[":block/string"];
+  return window.roamAlphaAPI.pull("[:block/string]", [":block/uid", uid])[
+    ":block/string"
+  ];
 }
 
 function getBlocksIncludingText(t) {
   return window.roamAlphaAPI.q(
-      `[:find ?u ?contents 
+    `[:find ?u ?contents 
     :where [?block :block/uid ?u]
       [?block :block/string ?contents]
-      [(clojure.string/includes? ?contents  "${t}")]]` );
+      [(clojure.string/includes? ?contents  "${t}")]]`
+  );
 }
 
 function concatTabAsList(listArray) {
-  let l='';
-  for(let i=0; i<listArray.length; i++) {
+  let l = "";
+  for (let i = 0; i < listArray.length; i++) {
     if (listArray[i].search(/\(\(/) == 0) {
-      let refContent = getBlockContent(listArray[i].slice(2,-2));
+      let refContent = getBlockContent(listArray[i].slice(2, -2));
       listArray[i] = refContent + " (Text from:" + listArray[i] + ")";
     }
     l += "%%" + listArray[i];
@@ -188,9 +195,9 @@ function concatTabAsList(listArray) {
 
 function getItemsFromChildrenBlocks(blocks) {
   let listArray = [];
-  for(let i=0; i<blocks.length; i++) {
+  for (let i = 0; i < blocks.length; i++) {
     let content = blocks[i].string;
-    if (content != '' && !(listArray.includes(content))) {
+    if (content != "" && !listArray.includes(content)) {
       listArray.push(content);
     }
   }
@@ -199,29 +206,29 @@ function getItemsFromChildrenBlocks(blocks) {
 
 function getValuesFromAttributeBlocks(blocks) {
   let listArray = [];
-  for(let i=0; i<blocks.length; i++) {
-    if (!(blocks[i][1].includes("\`\`\`"))) {
+  for (let i = 0; i < blocks.length; i++) {
+    if (!blocks[i][1].includes("```")) {
       let content = blocks[i][1];
-      content = content.split('::')[1].trim();
+      content = content.split("::")[1].trim();
       content = removeSelectorButtonFromContent(content);
-      if (content != '' && !(listArray.includes(content))) {
+      if (content != "" && !listArray.includes(content)) {
         listArray.push(content);
       }
     }
   }
   listArray = listArray.sort();
-  if (isAttributeBlock && (attribute==currentBlockAttributeName(startUid))) {
-    listArray.splice(0,0,"New value");
+  if (isAttributeBlock && attribute == currentBlockAttributeName(startUid)) {
+    listArray.splice(0, 0, "New value");
   }
   return listArray;
 }
 
 function removeSelectorButtonFromContent(s) {
-  let open = s.indexOf('{{'+buttonIcon);
+  let open = s.indexOf("{{" + buttonIcon);
   if (open != -1) {
-    let close = s.indexOf('}}');
+    let close = s.indexOf("}}");
     if (close != -1) {
-      s = s.slice(0,open) + s.slice(close+2);
+      s = s.slice(0, open) + s.slice(close + 2);
       s = s.trim();
     }
   }
@@ -229,7 +236,7 @@ function removeSelectorButtonFromContent(s) {
 }
 
 export default {
-  onload:  () => {
+  onload: () => {
     window.roamAlphaAPI.ui.commandPalette.addCommand({
       label: "Universal Selector",
       callback: async () => {
@@ -239,47 +246,47 @@ export default {
         startUid = window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"];
         var clipboard = await navigator.clipboard.readText();
         let blockref = normalizeUid(clipboard);
-        if (clipboard.includes('::')) attribute = clipboard.replace('::','');
+        if (clipboard.includes("::")) attribute = clipboard.replace("::", "");
         else attribute = undefined;
         window.roamjs.extension.smartblocks.triggerSmartblock({
-          srcName: 'Universal Selector',
+          srcName: "Universal Selector",
           targetUid: startUid,
-          variables: {blockref: blockref, attribute: attribute}
+          variables: { blockref: blockref, attribute: attribute },
         });
-      }
-    })
+      },
+    });
 
     const listCmd = {
-      text: 'LISTSELECTOR',
+      text: "LISTSELECTOR",
       help: "Open an input dropdown with the list of children of a given block. 1. uid of the parent block (optional if listUid is set in the workflow)",
       handler: (context) => () => {
         startUid = context.targetUid;
-        listUid=normalizeUid(context.variables.listUid);
-        attribute = '';
+        listUid = normalizeUid(context.variables.listUid);
+        attribute = "";
         listName = getListName(listUid);
         universalSelector(context.variables);
-        return '';
+        return "";
       },
-    }
+    };
     const attrCmd = {
-      text: 'ATTRIBUTEVALUESELECTOR',
+      text: "ATTRIBUTEVALUESELECTOR",
       help: "Open an input dropdown with the list of existing values of a given attribute. 1. name of the attribute (optional if attribute is set in the workflow",
       handler: (context) => () => {
         startUid = context.targetUid;
         attribute = normalizeTitle(context.variables.attribute);
-        listUid = '';
+        listUid = "";
         universalSelector(context.variables);
-        return '';
+        return "";
       },
-    }
+    };
     const insertCmd = {
-      text: 'INSERTITEMSELECTED',
+      text: "INSERTITEMSELECTED",
       help: "This command cannot be used separately, it is a part of the Universal Selector workflow.",
       handler: (context) => () => {
-          insertItemInBlock(context.variables.uid, context.variables.item);
-          return '';
-        },
-    }
+        insertItemInBlock(context.variables.uid, context.variables.item);
+        return "";
+      },
+    };
     if (window.roamjs?.extension?.smartblocks) {
       window.roamjs.extension.smartblocks.registerCommand(listCmd);
       window.roamjs.extension.smartblocks.registerCommand(attrCmd);
@@ -294,9 +301,12 @@ export default {
           window.roamjs.extension.smartblocks.registerCommand(insertCmd)
       );
     }
-    console.log('Universal Selector loaded.');
+    console.log("Universal Selector loaded.");
   },
   onunload: () => {
-    console.log('Universal Selector unloaded.');
-  }
+    window.roamAlphaAPI.ui.commandPalette.removeCommand({
+      label: "Universal Selector",
+    });
+    console.log("Universal Selector unloaded.");
+  },
 };
