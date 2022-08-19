@@ -1,2 +1,2 @@
 npm install
-npx roamjs-scripts build
+npx roamjs-scripts build --depot
