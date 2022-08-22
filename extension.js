@@ -287,14 +287,14 @@ export default {
       window.roamjs.extension.smartblocks.registerCommand(attrCmd);
       window.roamjs.extension.smartblocks.registerCommand(insertCmd);
     } else {
-      document.body.addEventListener(
-        `roamjs:smartblocks:loaded`,
-        () =>
-          window.roamjs?.extension.smartblocks &&
-          window.roamjs.extension.smartblocks.registerCommand(listCmd) &&
-          window.roamjs.extension.smartblocks.registerCommand(attrCmd) &&
-          window.roamjs.extension.smartblocks.registerCommand(insertCmd)
-      );
+      document.body.addEventListener(`roamjs:smartblocks:loaded`, () => {
+        window.roamjs?.extension.smartblocks &&
+          window.roamjs.extension.smartblocks.registerCommand(listCmd);
+        window.roamjs?.extension.smartblocks &&
+          window.roamjs.extension.smartblocks.registerCommand(attrCmd);
+        window.roamjs?.extension.smartblocks &&
+          window.roamjs.extension.smartblocks.registerCommand(insertCmd);
+      });
     }
     console.log("Universal Selector loaded.");
   },
