@@ -1,0 +1,95 @@
+.rm-or-select {
+  position: relative;
+}
+
+.rm-or-select .or-action-buttons {
+  display: flex;
+  flex-direction: row-reverse;
+  position: absolute;
+  top: -16px;
+  right: -20px;
+  gap: 2px;
+  z-index: 10;
+  opacity: 0;
+}
+
+.rm-or-select:hover .or-action-buttons {
+  opacity: 1;
+  padding-right: 8px;
+}
+
+.or-action-btn {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.6;
+  background: #e0e0e0;
+}
+
+.or-action-btn:hover {
+  opacity: 1;
+}
+
+.or-observer-menu .bp3-menu {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.or-random-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 7px;
+  border-bottom: 1px solid rgba(16, 22, 26, .15);
+  cursor: pointer;
+  user-select: none;
+}
+
+.or-random-row:hover {
+  background: #f5f8fa;
+}
+
+.or-random-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.or-random-stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.or-random-count {
+  min-width: 16px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.or-random-btn {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: white;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
