@@ -7,6 +7,10 @@ Turn any list in your Roam graph into an interactive dropdown selector. Populate
 - Migration from SmartBlock buttons (no more needed) to native `{{or: }}` component
 - Added a lot of features and a new syntax (see below), to make it way more intuitiv and powerful.
 
+
+https://github.com/user-attachments/assets/43ee2504-13c4-4ac4-bc24-96e870f59874
+
+
 ## How it works
 
 This extension enhances the built-in `{{or: }}` component in Roam Research. You can instantly insert it with `/Universal Selector` slash command (or equivalent command in Command palette, see below for details on commands). When you click on an `{{or: }}` element, a filterable dropdown menu appears with options sourced from various parts of your graph. After selecting a value, the component stays re-clickable so you can change it at any time.
