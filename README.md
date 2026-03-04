@@ -1,6 +1,11 @@
 # Universal Selector
 
-Turn any list in your Roam graph into an interactive dropdown selector. Populate options from block references, page children, attribute values, or inline lists — all driven by Roam's native `{{or: }}` component.
+Turn any list in your Roam graph into an interactive dropdown selector. Populate options from block references, page children, attribute values, or inline lists — all driven by Roam's native `{{or: }}` component, enhanced with autocomplete, page reference parsing (only the selected option is referenced), random pick, insert in children, buttons to reset or keep only the selected option...
+
+### 🆕 New in v.3 (March 2026)
+
+- Migration from SmartBlock buttons (no more needed) to native `{{or: }}` component
+- Added a lot of features and a new syntax (see below), to make it way more intuitiv and powerful.
 
 ## How it works
 
@@ -22,7 +27,7 @@ After selecting a value:
 {{or: Selected Value | +((block-uid))}}
 ```
 
-**Depth limit** — append `(n)` to restrict how many levels of children are fetched:
+**Depth limit** — append `(n)` to restrict how many levels of children are fetched (by default, all children are fetched):
 
 ```
 {{or: ((block-uid))(2)}}     ← only direct children and grandchildren
@@ -69,11 +74,11 @@ A simple pipe-separated list of options:
 {{or: Option A | Option B | Option C}}
 ```
 
-The selected value is rotated to the front. Supports automatic prefix inference for `[[page refs]]`, `#[[tags]]`, and `#tags`.
+The selected value is rotated to the front. Options can be simple text, block reference, page reference or tag. Supports automatic prefix parsing for `[[page refs]]`, `#[[tags]]`, and `#tags`: only the selected value will remain a page reference (the non selected values are stored as simple text, so they are no more catched by queries or linked references)
 
-## Auto-child extraction (`=` suffix)
+## Auto-child output: extraction in a child block (`=` suffix)
 
-Append `=` after the source reference to **automatically create the selected value as a child block** of the current block, in addition to displaying it in the `{{or:}}` component. This is useful for extracting structured data from a dropdown into the block's children.
+Append `=` after the source reference to **automatically create the selected value as a child block (appended as last child)** of the current block, in addition to displaying it in the `{{or:}}` component. This is useful for extracting multiple values from the dropdown into the block's children.
 
 ```
 {{or: ((block-uid))=}}             ← auto-child from block-ref source
@@ -94,13 +99,13 @@ Each time you select a value, it both updates the displayed value in the compone
 
 The dropdown supports multiple selection modes via keyboard/mouse modifiers:
 
-| Action | Mode | Behavior |
-|--------|------|----------|
-| Click / Enter | **Select** | Replace the current value in the component |
-| Shift+Enter / Shift+Backspace | **Keep** | Replace the entire `{{or:}}` component with the selected value (plain text) |
-| Alt+Click / Alt+Enter / Alt+Tab | **Child** | Append the selected value as a child block (without changing the component) |
-| Cmd/Ctrl + any action | **As reference** | Insert as `((block-ref))` instead of plain text |
-| Type + Enter (no matches) | **Add** | Create a new value in the source list and select it |
+| Action                          | Mode             | Behavior                                                                    |
+| ------------------------------- | ---------------- | --------------------------------------------------------------------------- |
+| Click / Enter                   | **Select**       | Replace the current value in the component                                  |
+| Shift+Enter / Shift+Backspace   | **Keep**         | Replace the entire `{{or:}}` component with the selected value (plain text) |
+| Alt+Click / Alt+Enter / Alt+Tab | **Child**        | Append the selected value as a child block (without changing the component) |
+| Cmd/Ctrl + any action           | **As reference** | Insert as `((block-ref))` instead of plain text                             |
+| Type + Enter (no matches)       | **Add**          | Create a new value in the source list and select it                         |
 
 ## Hover action buttons
 
@@ -120,6 +125,7 @@ For source-backed components, a **Random** row appears at the top of the dropdow
 ## Settings
 
 - **Always insert as block reference** — when enabled, selecting an item inserts its `((block reference))` instead of its text content (unless it is already a reference or tag). Can be toggled per-selection by holding Cmd/Ctrl.
+- **Show Random option**: you can disable "Random" option in the dropdown if you don't use it.
 
 ## Hierarchical source lists
 
