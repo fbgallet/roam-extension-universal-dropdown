@@ -50,11 +50,15 @@ export function getFocusedBlock() {
   }
 }
 
-export async function setBlockFocusAndSelection(uid, windowId, cursorStart) {
+export async function setBlockFocusAndSelection(uid, windowId, cursorStart, cursorEnd) {
   try {
+    const selection =
+      cursorEnd != null && cursorEnd !== cursorStart
+        ? { start: cursorStart, end: cursorEnd }
+        : { start: cursorStart };
     return await window.roamAlphaAPI.ui.setBlockFocusAndSelection({
       location: { "block-uid": uid, "window-id": windowId },
-      selection: { start: cursorStart },
+      selection,
     });
   } catch (e) {
     console.error("[universal-selector] setBlockFocusAndSelection failed:", e);

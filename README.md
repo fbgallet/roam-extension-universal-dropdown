@@ -9,7 +9,7 @@ Turn any list in your Roam graph into an interactive dropdown selector. Populate
 
 ## How it works
 
-This extension enhances the built-in `{{or: }}` component in Roam Research. When you click on an `{{or: }}` element, a filterable dropdown menu appears with options sourced from various parts of your graph. After selecting a value, the component stays re-clickable so you can change it at any time.
+This extension enhances the built-in `{{or: }}` component in Roam Research. You can instantly insert it with `/Universal Selector` slash command (or equivalent command in Command palette, see below for details on commands). When you click on an `{{or: }}` element, a filterable dropdown menu appears with options sourced from various parts of your graph. After selecting a value, the component stays re-clickable so you can change it at any time.
 
 ## Source types
 
@@ -32,6 +32,12 @@ After selecting a value:
 ```
 {{or: ((block-uid))(2)}}     ← only direct children and grandchildren
 ```
+
+> ![NOTE]
+> When the source block or page has a nested hierarchy:
+>
+> - **Indentation** reflects the depth of nested children
+> - **Font size** decreases with depth for visual hierarchy
 
 ### 2. Page children
 
@@ -76,24 +82,36 @@ A simple pipe-separated list of options:
 
 The selected value is rotated to the front. Options can be simple text, block reference, page reference or tag. Supports automatic prefix parsing for `[[page refs]]`, `#[[tags]]`, and `#tags`: only the selected value will remain a page reference (the non selected values are stored as simple text, so they are no more catched by queries or linked references)
 
-## Auto-child output: extraction in a child block (`=` suffix)
+## Commands
 
-Append `=` after the source reference to **automatically create the selected value as a child block (appended as last child)** of the current block, in addition to displaying it in the `{{or:}}` component. This is useful for extracting multiple values from the dropdown into the block's children.
+### Slash command: "Universal Selector: Insert dropdown"
 
-```
-{{or: ((block-uid))=}}             ← auto-child from block-ref source
-{{or: [[Page]]=}}                  ← auto-child from page source
-{{or: [[Page]](2)=}}               ← auto-child with depth limit
-{{or: attr:Status=}}               ← auto-child from attribute source
-```
+Available inline while editing a block by typing `/Universal Selector`:
 
-After selecting, the `=` is preserved so subsequent selections keep appending children:
+- **Inside an attribute block** (`Attr:: ...`): inserts `{{or: }}` after `::` and opens the dropdown pre-filled with attribute values.
+- **Anywhere else** — opens a **source type dialog** so you can choose what kind of selector to insert:
 
-```
-{{or: Selected Value | +((block-uid))=}}
-```
+| Key   | Source type      | Inserted template                                                              |
+| ----- | ---------------- | ------------------------------------------------------------------------------ |
+| **I** | Inline list      | `{{or: Option A \| B \| C}}` — "Option A" pre-selected, ready to type          |
+| **B** | Block reference  | `{{or: ((` _cursor_ `))}}` — cursor placed inside the ref markers              |
+| **P** | Page children    | `{{or: [[` _cursor_ `]](2)}}` — cursor inside the page-name brackets (depth 2) |
+| **A** | Attribute values | `{{or: attr:[[` _cursor_ `]]}}` — cursor inside the attribute name brackets    |
 
-Each time you select a value, it both updates the displayed value in the component and creates a new child block with that value under the current block.
+### Block-ref context menu: "Universal Selector: Convert to dropdown"
+
+Right-click on any `((block-ref))` in the rendered view to open a dialog to pick options from the referenced block's children or siblings — same behavior as the command palette when the cursor is inside a `((block-ref))`.
+
+### Command palette: "Universal Selector: Insert or Open dropdown"
+
+A smart command that adapts to the current block and cursor position:
+
+- **Cursor inside an existing `{{or: }}`** — opens its dropdown directly without modifying the block.
+- **Cursor inside a `((block-ref))`** — opens a dialog to pick options from the referenced block's children or siblings.
+- **Inside an attribute block** (`Attr:: ...`) — inserts `{{or: }}` right after `::` and immediately opens the dropdown pre-filled with all existing values for that attribute across your graph.
+- **Anywhere else** — opens the same **source type dialog** as the slash command (four source types: inline list, block reference, page children, attribute values).
+
+Bind this command to a keyboard shortcut in Roam's hotkey settings for fast access.
 
 ## Selection modes
 
@@ -122,18 +140,29 @@ For source-backed components, a **Random** row appears at the top of the dropdow
 - Use the +/- stepper to pick multiple random items (inserted as child blocks)
 - Hold Alt to force insertion as children even for single picks
 
+## Auto-child output: extraction in a child block (`=` suffix)
+
+Append `=` after the source reference to **automatically create the selected value as a child block (appended as last child)** of the current block, in addition to displaying it in the `{{or:}}` component. This is useful for extracting multiple values from the dropdown into the block's children.
+
+```
+{{or: ((block-uid))=}}             ← auto-child from block-ref source
+{{or: [[Page]]=}}                  ← auto-child from page source
+{{or: [[Page]](2)=}}               ← auto-child with depth limit
+{{or: attr:Status=}}               ← auto-child from attribute source
+```
+
+After selecting, the `=` is preserved so subsequent selections keep appending children:
+
+```
+{{or: Selected Value | +((block-uid))=}}
+```
+
+Each time you select a value, it both updates the displayed value in the component and creates a new child block with that value under the current block.
+
 ## Settings
 
 - **Always insert as block reference** — when enabled, selecting an item inserts its `((block reference))` instead of its text content (unless it is already a reference or tag). Can be toggled per-selection by holding Cmd/Ctrl.
 - **Show Random option**: you can disable "Random" option in the dropdown if you don't use it.
-
-## Hierarchical source lists
-
-When the source block or page has a nested hierarchy:
-
-- **Headings** (blocks with heading format) are displayed as non-selectable group headers
-- **Indentation** reflects the depth of nested children
-- **Font size** decreases with depth for visual hierarchy
 
 ## Legacy: SmartBlocks integration
 
@@ -146,3 +175,13 @@ This extension originally relied on SmartBlocks for its dropdown functionality. 
 - **Attribute values Selector** — SmartBlock-driven dropdown from attribute values
 
 These commands require the [SmartBlocks extension](https://roamjs.com/extensions/smartblocks) to be installed.
+
+---
+
+## If you want to support my work
+
+If you want to encourage me to develop further and enhance Universal selector extension, you can [buy me a coffee ☕ here](https://buymeacoffee.com/fbgallet) or [sponsor me on Github](https://github.com/sponsors/fbgallet). Thanks in advance for your support! 🙏
+
+For any question or suggestion, DM me on **X/Twitter** and follow me to be informed of updates and new extensions : [@fbgallet](https://x.com/fbgallet), or on Bluesky: [@fbgallet.bsky.social](https://bsky.app/profile/fbgallet.bsky.social)
+
+Please report any issue [here](https://github.com/fbgallet/roam-extension-universal-dropdown/issues).

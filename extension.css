@@ -93,3 +93,105 @@
   align-items: center;
   justify-content: center;
 }
+
+/* Dark mode (Roam Studio .rs-dark) */
+
+.rs-dark .or-action-btn {
+  background: #394b59;
+}
+
+.rs-dark .or-random-row {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.rs-dark .or-random-row {
+  background: #30404d;
+}
+
+.rs-dark .or-random-btn {
+  border-color: #5c7080;
+  background: #394b59;
+  color: #f5f8fa;
+}
+
+/* Choice dialog */
+
+.or-choice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(16, 22, 26, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.or-choice-dialog {
+  background: white;
+  border-radius: 6px;
+  padding: 20px;
+  min-width: 340px;
+  max-width: 480px;
+  box-shadow:
+    0 0 0 1px rgba(16, 22, 26, 0.1),
+    0 4px 8px rgba(16, 22, 26, 0.2);
+}
+
+.or-choice-dialog h4 {
+  margin-bottom: 12px;
+}
+
+.or-choice-hint {
+  font-size: 12px;
+  color: #5c7080;
+  margin: 0 0 14px;
+}
+
+.or-choice-btn-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.or-choice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.or-choice-btn-top {
+  display: flex;
+  align-items: center;
+}
+
+.or-choice-key {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 11px;
+  opacity: 0.7;
+  font-family: inherit;
+}
+
+.or-choice-desc {
+  font-size: 11px;
+  opacity: 0.65;
+  margin-top: 3px;
+  white-space: pre;
+}
+
+.rs-dark .or-choice-dialog {
+  background: #30404d;
+  color: #f5f8fa;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 4px 8px rgba(0, 0, 0, 0.4);
+}
+
+.rs-dark .or-choice-hint {
+  color: #a7b6c2;
+}

@@ -19,8 +19,5 @@
   "homepage": "https://github.com/fbgallet/roam-extension-universal-dropdown#readme",
   "devDependencies": {
     "roamjs-scripts": "^0.27.1"
-  },
-  "dependencies": {
-    "roamjs-components": "^0.70.1"
   }
 }

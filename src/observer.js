@@ -69,8 +69,6 @@ export function startObserver() {
   if (existingOptions.length > 0) {
     attachOptionListeners(existingOptions);
   }
-
-  console.log("[or-observer] Started.");
 }
 
 export function stopObserver() {

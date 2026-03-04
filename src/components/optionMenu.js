@@ -124,15 +124,15 @@ export function showOptionMenu(anchorElt, items, onSelect, allowAdd = false, onR
     const lowerFilter = filter.toLowerCase();
     const matchingItems = new Set();
     items.forEach((item) => {
-      if (!item.isHeader && item.text.toLowerCase().includes(lowerFilter)) {
+      if (item.text.toLowerCase().includes(lowerFilter)) {
         matchingItems.add(item);
       }
     });
-    return items.filter((item) => item.isHeader || matchingItems.has(item));
+    return items.filter((item) => matchingItems.has(item));
   }
 
   function getSelectableFromFiltered(filtered) {
-    return filtered.filter((item) => !item.isHeader);
+    return filtered;
   }
 
   function updateHighlight() {
@@ -183,48 +183,32 @@ export function showOptionMenu(anchorElt, items, onSelect, allowAdd = false, onR
       const li = document.createElement("li");
       const paddingLeft = 7 + item.depth * 16;
 
-      if (item.isHeader) {
-        const div = document.createElement("div");
-        div.style.cssText = [
-          `padding:6px 7px 2px ${paddingLeft}px`,
-          "font-weight:700",
-          "color:#5c7080",
-          "font-size:13px",
-          "cursor:default",
-          "user-select:none",
-        ].join(";");
-        const textNode = document.createElement("span");
-        div.appendChild(textNode);
-        li.appendChild(div);
-        renderRoamString(textNode, item.text);
-      } else {
-        const a = document.createElement("a");
-        a.className = "bp3-menu-item";
-        const idx = selectableElements.length;
-        selectableElements.push(a);
-        if (idx === highlightIndex) a.classList.add("bp3-active");
+      const a = document.createElement("a");
+      a.className = "bp3-menu-item";
+      const idx = selectableElements.length;
+      selectableElements.push(a);
+      if (idx === highlightIndex) a.classList.add("bp3-active");
 
-        const fontSize = Math.max(14 - item.depth, 12);
-        const fontWeight = item.depth === 0 ? "500" : "normal";
-        a.style.cssText = `padding-left:${paddingLeft}px;font-size:${fontSize}px;font-weight:${fontWeight};cursor:pointer;display:block;`;
-        const textNode = document.createElement("span");
-        textNode.style.pointerEvents = "none";
-        a.appendChild(textNode);
-        renderRoamString(textNode, item.text);
+      const fontSize = Math.max(14 - item.depth, 12);
+      const fontWeight = item.depth === 0 ? "500" : "normal";
+      a.style.cssText = `padding-left:${paddingLeft}px;font-size:${fontSize}px;font-weight:${fontWeight};cursor:pointer;display:block;`;
+      const textNode = document.createElement("span");
+      textNode.style.pointerEvents = "none";
+      a.appendChild(textNode);
+      renderRoamString(textNode, item.text);
 
-        a.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const mode = e.altKey ? "child" : "select";
-          onSelect(item, e.metaKey || e.ctrlKey, mode);
-          dismiss();
-        });
-        a.addEventListener("mouseenter", () => {
-          highlightIndex = idx;
-          updateHighlight();
-        });
-        li.appendChild(a);
-      }
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const mode = e.altKey ? "child" : "select";
+        onSelect(item, e.metaKey || e.ctrlKey, mode);
+        dismiss();
+      });
+      a.addEventListener("mouseenter", () => {
+        highlightIndex = idx;
+        updateHighlight();
+      });
+      li.appendChild(a);
 
       menuList.appendChild(li);
     });

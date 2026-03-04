@@ -295,7 +295,7 @@ export async function handleRandomOptionClick(
   asRef,
   singleSelectFn,
 ) {
-  const pool = items.filter((i) => !i.isHeader);
+  const pool = items;
   if (pool.length === 0) return;
 
   const n = Math.min(count, pool.length);

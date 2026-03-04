@@ -10,8 +10,16 @@ import {
   getFocusedBlock,
   setBlockFocusAndSelection,
 } from "./utils.js";
-import { startObserver, stopObserver, triggerOrDropdownByIndex } from "./observer.js";
+import {
+  startObserver,
+  stopObserver,
+  triggerOrDropdownByIndex,
+} from "./observer.js";
 import { OR_COMPONENT_GLOBAL_CAPTURE } from "./regex.js";
+import {
+  showChoiceDialog,
+  showSourceTypeDialog,
+} from "./components/choiceDialog.js";
 import "../extension.css";
 
 let startUid,
@@ -222,40 +230,7 @@ function removeSelectorButtonFromContent(s) {
 }
 
 function showChildrenOrSiblingsDialog(refUid, targetUid, anchorElt) {
-  const overlay = document.createElement("div");
-  overlay.style.cssText =
-    "position:fixed;inset:0;z-index:30;background:rgba(16,22,26,.4);display:flex;align-items:center;justify-content:center;";
-
-  const dialog = document.createElement("div");
-  dialog.className = "bp3-dialog";
-  dialog.style.cssText =
-    "background:white;border-radius:6px;padding:20px;min-width:300px;box-shadow:0 0 0 1px rgba(16,22,26,.1),0 4px 8px rgba(16,22,26,.2);";
-
-  const title = document.createElement("h4");
-  title.className = "bp3-heading";
-  title.textContent = "Create Universal Selector from\u2026";
-  title.style.marginBottom = "16px";
-
-  const btnChildren = document.createElement("button");
-  btnChildren.className = "bp3-button bp3-intent-primary";
-  btnChildren.textContent = "Children of this block";
-
-  const btnSiblings = document.createElement("button");
-  btnSiblings.className = "bp3-button";
-  btnSiblings.style.marginLeft = "8px";
-  btnSiblings.textContent = "Siblings (use parent)";
-
-  function dismiss() {
-    overlay.remove();
-    document.removeEventListener("keydown", onEsc);
-  }
-
-  function onEsc(e) {
-    if (e.key === "Escape") dismiss();
-  }
-
   function insertAndOpen(sourceUid) {
-    dismiss();
     // Blur any active textarea so Roam finishes its auto-save before we write
     const active = document.activeElement;
     if (active?.tagName === "TEXTAREA") active.blur();
@@ -270,9 +245,15 @@ function showChildrenOrSiblingsDialog(refUid, targetUid, anchorElt) {
       const freshStart = freshMatch.index;
       const freshEnd = freshStart + freshMatch[0].length;
       // Count {{or: }} components before the ref position for correct orIndex
-      const orsBefore = [...freshContent.slice(0, freshStart).matchAll(OR_COMPONENT_GLOBAL_CAPTURE)].length;
+      const orsBefore = [
+        ...freshContent
+          .slice(0, freshStart)
+          .matchAll(OR_COMPONENT_GLOBAL_CAPTURE),
+      ].length;
       const newContent =
-        freshContent.slice(0, freshStart) + `{{or: ((${sourceUid}))}}` + freshContent.slice(freshEnd);
+        freshContent.slice(0, freshStart) +
+        `{{or: ((${sourceUid}))}}` +
+        freshContent.slice(freshEnd);
       await updateBlock(targetUid, newContent);
       setTimeout(() => {
         const freshAnchor =
@@ -280,28 +261,21 @@ function showChildrenOrSiblingsDialog(refUid, targetUid, anchorElt) {
           document.querySelector(`.rm-block-main[id$="${targetUid}"]`) ||
           anchorElt;
         triggerOrDropdownByIndex(targetUid, orsBefore, freshAnchor, newContent);
-      }, 300);
-    }, 200);
+      }, 150);
+    }, 100);
   }
 
-  btnChildren.addEventListener("click", () => { insertAndOpen(refUid); });
+  showChoiceDialog(
+    "Create Universal Selector from\u2026",
+    { label: "Children of this block", key: "C", primary: true },
+    { label: "Siblings (use parent)", key: "S" },
+    () => insertAndOpen(refUid),
+    () => {
+      const parentUid = getBlockParentUid(refUid);
 
-  btnSiblings.addEventListener("click", () => {
-    const parentUid = getBlockParentUid(refUid);
-    console.log("[or-observer] Siblings clicked. refUid:", refUid, "parentUid:", parentUid);
-    if (!parentUid) {
-      dismiss();
-      return;
-    }
-    insertAndOpen(parentUid);
-  });
-
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(); });
-  document.addEventListener("keydown", onEsc);
-
-  dialog.append(title, btnChildren, btnSiblings);
-  overlay.appendChild(dialog);
-  document.body.appendChild(overlay);
+      if (parentUid) insertAndOpen(parentUid);
+    },
+  );
 }
 
 export default {
@@ -315,7 +289,7 @@ export default {
       await extensionAPI.settings.set("showRandom", true);
 
     extensionAPI.ui.commandPalette.addCommand({
-      label: "Universal Selection: Insert or Open dropdown",
+      label: "Universal Selector: Insert or Open dropdown",
       callback: async () => {
         const focusedBlock = getFocusedBlock();
         const uid = focusedBlock?.["block-uid"];
@@ -326,7 +300,8 @@ export default {
         const cursorOffset = textarea?.selectionStart ?? 0;
 
         // Use the textarea (or block element) as anchor for dropdown positioning
-        const anchorElt = textarea ||
+        const anchorElt =
+          textarea ||
           document.querySelector(`.roam-block[id$="${uid}"]`) ||
           document.body;
 
@@ -339,7 +314,9 @@ export default {
           const colonIdx = content.indexOf("::");
           const insertPos = colonIdx + 2;
           const newContent =
-            content.slice(0, insertPos) + " {{or: }}" + content.slice(insertPos);
+            content.slice(0, insertPos) +
+            " {{or: }}" +
+            content.slice(insertPos);
           await updateBlock(uid, newContent);
           setTimeout(() => {
             const freshAnchor =
@@ -347,7 +324,7 @@ export default {
               document.querySelector(`.rm-block-main[id$="${uid}"]`) ||
               anchorElt;
             triggerOrDropdownByIndex(uid, 0, freshAnchor, newContent);
-          }, 300);
+          }, 150);
           return;
         }
 
@@ -355,14 +332,17 @@ export default {
         const orMatches = [...content.matchAll(OR_COMPONENT_GLOBAL_CAPTURE)];
         for (let i = 0; i < orMatches.length; i++) {
           const m = orMatches[i];
-          if (cursorOffset >= m.index && cursorOffset <= m.index + m[0].length) {
+          if (
+            cursorOffset >= m.index &&
+            cursorOffset <= m.index + m[0].length
+          ) {
             setTimeout(() => {
               const freshAnchor =
                 document.querySelector(`.roam-block[id$="${uid}"]`) ||
                 document.querySelector(`.rm-block-main[id$="${uid}"]`) ||
                 anchorElt;
               triggerOrDropdownByIndex(uid, i, freshAnchor);
-            }, 300);
+            }, 150);
             return;
           }
         }
@@ -374,18 +354,124 @@ export default {
           const refStart = refMatch.index;
           const refEnd = refMatch.index + refMatch[0].length;
           if (cursorOffset >= refStart && cursorOffset <= refEnd) {
-            setTimeout(() => showChildrenOrSiblingsDialog(refMatch[1], uid, anchorElt), 300);
+            setTimeout(
+              () => showChildrenOrSiblingsDialog(refMatch[1], uid, anchorElt),
+              150,
+            );
             return;
           }
         }
 
-        // Case 4: Default — insert {{or: }} at cursor, place cursor inside it
-        const newContent =
-          content.slice(0, cursorOffset) + "{{or: }}" + content.slice(cursorOffset);
-        await updateBlock(uid, newContent);
-        // Re-focus the block and position cursor inside {{or: }}
-        const cursorPos = cursorOffset + 6; // length of "{{or: " = 6 chars
-        await setBlockFocusAndSelection(uid, focusedBlock?.["window-id"], cursorPos);
+        // Case 4: Default — ask what source type to insert
+        const windowId = focusedBlock?.["window-id"];
+
+        async function insertOrTemplate(template, selectStart, selectLen) {
+          const freshContent = getBlockContent(uid);
+          const newContent =
+            freshContent.slice(0, cursorOffset) +
+            template +
+            freshContent.slice(cursorOffset);
+          await updateBlock(uid, newContent);
+          await setBlockFocusAndSelection(
+            uid,
+            windowId,
+            cursorOffset + selectStart,
+            cursorOffset + selectStart + selectLen,
+          );
+        }
+
+        showSourceTypeDialog(
+          // Inline list — insert {{or: Option A | B | C}} and select "Option A"
+          () => insertOrTemplate("{{or: Option A | B | C}}", 6, 8),
+          // Block reference — insert {{or: ((CURSOR))}} with cursor between (( ))
+          () => insertOrTemplate("{{or: (())}}", 9, 0),
+          // Page children — insert {{or: [[CURSOR]](2)}} selecting placeholder
+          () => insertOrTemplate("{{or: [[]](2)}}", 8, 0),
+          // Attribute values — insert {{or: attr:[[CURSOR]]}} selecting placeholder
+          () => insertOrTemplate("{{or: attr:[[]]}}", 12, 0),
+        );
+      },
+    });
+
+    window.roamAlphaAPI.ui.slashCommand.addCommand({
+      label: "Universal Selector: Insert dropdown",
+      callback: (args) => {
+        const uid = args?.["block-uid"];
+        if (!uid) return "";
+
+        // Case 1: Attribute block — insert {{or: }} after "::" and open dropdown
+        const attrName = currentBlockAttributeName(uid);
+        if (attrName !== "") {
+          const content = getBlockContent(uid);
+          const colonIdx = content.indexOf("::");
+          const newContent =
+            content.slice(0, colonIdx + 2) +
+            " {{or: }}" +
+            content.slice(colonIdx + 2);
+          // Capture a positioned proxy from the textarea before Roam dismisses the slash UI
+          // (the block re-enters edit mode after updateBlock, so .roam-block won't be in the DOM)
+          const proxyAnchor = (() => {
+            const textarea = document.querySelector("textarea.rm-block-input");
+            const rect = textarea
+              ? textarea.getBoundingClientRect()
+              : { top: 100, left: 100, bottom: 120, height: 20 };
+            const el = document.createElement("div");
+            el.style.cssText = `position:fixed;top:${rect.bottom}px;left:${rect.left}px;width:1px;height:1px;pointer-events:none;`;
+            document.body.appendChild(el);
+            return el;
+          })();
+          setTimeout(() => {
+            updateBlock(uid, newContent).then(() => {
+              setTimeout(() => {
+                triggerOrDropdownByIndex(uid, 0, proxyAnchor, newContent);
+                proxyAnchor.remove();
+              }, 300);
+            });
+          }, 50);
+          return "";
+        }
+
+        // Case 2: Basic block — ask what source type, then insert the right template
+        const insertOffset = args?.indexes?.[0] ?? 0;
+        const windowId = args?.["window-id"];
+
+        // Capture proxy anchor before Roam dismisses the slash UI
+        const proxyAnchorSlash = (() => {
+          const ta = document.querySelector("textarea.rm-block-input");
+          const rect = ta
+            ? ta.getBoundingClientRect()
+            : { top: 100, left: 100, bottom: 120 };
+          const el = document.createElement("div");
+          el.style.cssText = `position:fixed;top:${rect.bottom}px;left:${rect.left}px;width:1px;height:1px;pointer-events:none;`;
+          document.body.appendChild(el);
+          return el;
+        })();
+
+        async function insertSlashTemplate(template, selectStart, selectLen) {
+          proxyAnchorSlash.remove();
+          const freshContent = getBlockContent(uid);
+          const newContent =
+            freshContent.slice(0, insertOffset) +
+            template +
+            freshContent.slice(insertOffset);
+          await updateBlock(uid, newContent);
+          await setBlockFocusAndSelection(
+            uid,
+            windowId,
+            insertOffset + selectStart,
+            insertOffset + selectStart + selectLen,
+          );
+        }
+
+        setTimeout(() => {
+          showSourceTypeDialog(
+            () => insertSlashTemplate("{{or: Option A | B | C}}", 5, 6),
+            () => insertSlashTemplate("{{or: (())}}", 7, 0),
+            () => insertSlashTemplate("{{or: [[]](2)}}", 7, 0),
+            () => insertSlashTemplate("{{or: attr:[[]]}}", 12, 0),
+          );
+        }, 50);
+        return "";
       },
     });
 
@@ -450,12 +536,28 @@ export default {
           window.roamjs.extension.smartblocks.registerCommand(insertCmd);
       });
     }
+    window.roamAlphaAPI.ui.blockRefContextMenu.addCommand({
+      label: "Universal Selector: Convert to dropdown",
+      callback: (e) => {
+        const refUid = e["ref-uid"];
+        const blockUid = e["block-uid"];
+        const anchorElt =
+          document.querySelector(`.roam-block[id$="${blockUid}"]`) ||
+          document.querySelector(`.rm-block-main[id$="${blockUid}"]`);
+        showChildrenOrSiblingsDialog(refUid, blockUid, anchorElt);
+      },
+    });
     startObserver();
     console.log("Universal Selector loaded.");
   },
   onunload: () => {
     stopObserver();
-
+    window.roamAlphaAPI.ui.blockRefContextMenu.removeCommand({
+      label: "Universal Selector: Convert to dropdown",
+    });
+    window.roamAlphaAPI.ui.slashCommand.removeCommand({
+      label: "Universal Selector: Insert dropdown",
+    });
     console.log("Universal Selector unloaded.");
   },
 };
