@@ -7,8 +7,7 @@ Turn any list in your Roam graph into an interactive dropdown selector. Populate
 - Migration from SmartBlock buttons (no more needed) to native `{{or: }}` component
 - Added a lot of features and a new syntax (see below), to make it way more intuitiv and powerful.
 
-
-https://github.com/user-attachments/assets/43ee2504-13c4-4ac4-bc24-96e870f59874
+![Universal Selector short demo](https://github.com/user-attachments/assets/d294226d-ef4b-40c3-9d4b-2342c82cec57)
 
 
 ## How it works
