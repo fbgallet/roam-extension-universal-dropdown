@@ -7,7 +7,7 @@
   flex-direction: row-reverse;
   position: absolute;
   top: -16px;
-  right: -20px;
+  right: -16px;
   gap: 2px;
   z-index: 10;
   opacity: 0;
@@ -49,7 +49,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 4px 7px;
-  border-bottom: 1px solid rgba(16, 22, 26, .15);
+  border-bottom: 1px solid rgba(16, 22, 26, 0.15);
   cursor: pointer;
   user-select: none;
 }

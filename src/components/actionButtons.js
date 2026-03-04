@@ -4,7 +4,7 @@
  * Simple list mode: "Keep value only" (✕) only
  */
 
-import { getBlockContent, replaceOrComponentAt } from "../utils.js";
+import { getBlockContent, replaceOrComponentAt, updateBlock } from "../utils.js";
 import {
   OR_COMPONENT_GLOBAL_CAPTURE,
   PLUS_BLOCK_REF,
@@ -15,7 +15,7 @@ import {
 // Matches a selected-state or-component that carries a +source reference.
 // Group 1: the selected value (before the pipe)
 // Group 2: the full +source token (after the pipe), e.g. "+((uid))(2)", "+[[page]]", "+attr:[[name]]"
-const SOURCE_BACKED_OR = /\{\{or:\s*(.+?)\s*\|\s*(\+(?:\(\([a-zA-Z0-9_-]{9}\)\)(?:\(\d+\))?|\[\[.*?\]\](?:\(\d+\))?|attr:(?:\[\[.*?\]\]|[^\|\}\s]+)))\s*\}\}/;
+const SOURCE_BACKED_OR = /\{\{or:\s*(.+?)\s*\|\s*(\+(?:\(\([a-zA-Z0-9_-]{9}\)\)(?:\(\d+\))?|\[\[.*?\]\](?:\(\d+\))?|attr:(?:\[\[.*?\]\]|[^\|\}\s]+?))=?)\s*\}\}/;
 
 export function attachActionButtons(optionElt) {
   const wrapper = optionElt.closest(".rm-or-select");
@@ -73,7 +73,7 @@ export function attachActionButtons(optionElt) {
   wrapper.appendChild(container);
 }
 
-function keepValueOnly(targetUid, orIndex) {
+async function keepValueOnly(targetUid, orIndex) {
   const content = getBlockContent(targetUid);
   if (!content) return;
 
@@ -88,12 +88,10 @@ function keepValueOnly(targetUid, orIndex) {
   const selectedValue = sourceMatch ? sourceMatch[1].trim() : body.split("|")[0].trim();
 
   const newContent = replaceOrComponentAt(content, orIndex, selectedValue);
-  window.roamAlphaAPI.updateBlock({
-    block: { uid: targetUid, string: newContent },
-  });
+  await updateBlock(targetUid, newContent);
 }
 
-function resetOption(targetUid, orIndex, sourceToken) {
+async function resetOption(targetUid, orIndex, sourceToken) {
   const content = getBlockContent(targetUid);
   if (!content) return;
 
@@ -111,7 +109,5 @@ function resetOption(targetUid, orIndex, sourceToken) {
   }
 
   const newContent = replaceOrComponentAt(content, orIndex, newComponent);
-  window.roamAlphaAPI.updateBlock({
-    block: { uid: targetUid, string: newContent },
-  });
+  await updateBlock(targetUid, newContent);
 }

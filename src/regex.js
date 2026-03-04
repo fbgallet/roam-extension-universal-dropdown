@@ -68,43 +68,47 @@ export const ANY_ROAM_COMPONENT_GLOBAL = /\{\{[^\}]*\}\}/g;
 /**
  * +((uid)) or +((uid))(n) — block-ref children source.
  * Group 1: uid  |  Group 2: optional "(n)" depth suffix, e.g. "(2)"
+ * Group 3: optional "=" auto-child suffix
  */
-export const PLUS_BLOCK_REF = /\+\(\(([a-zA-Z0-9_-]{9})\)\)(\(\d+\))?/;
+export const PLUS_BLOCK_REF = /\+\(\(([a-zA-Z0-9_-]{9})\)\)(\(\d+\))?(=)?/;
 
 /**
  * +attr:name or +attr:[[name]] — attribute-values source (selected state).
  * Group 1: the raw attribute token, either [[name]] or bare name.
+ * Group 2: optional "=" auto-child suffix
  */
-export const PLUS_ATTR = /\+attr:(\[\[.*?\]\]|[^\|\}\s]+)/;
+export const PLUS_ATTR = /\+attr:(\[\[.*?\]\]|[^\|\}\s]+?)(=)?(?=\s*\}\}|\s*$)/;
 
 /**
  * +[[page]] or +[[page]](n) — page-children source (selected state).
  * Group 1: [[page]]  |  Group 2: optional "(n)" depth suffix.
+ * Group 3: optional "=" auto-child suffix
  */
-export const PLUS_PAGE_REF = /\+(\[\[.*?\]\])(\(\d+\))?/;
+export const PLUS_PAGE_REF = /\+(\[\[.*?\]\])(\(\d+\))?(=)?/;
 
 // ── Initial-state source detection (no pipe yet, sole body content) ────────
 
 /**
- * Sole body is a bare ((uid)), optionally followed by (n).
+ * Sole body is a bare ((uid)), optionally followed by (n) and/or =.
  * Anchored — use against the trimmed or-body.
- * Group 1: uid  |  Group 2: optional "(n)" depth suffix.
+ * Group 1: uid  |  Group 2: optional "(n)" depth suffix  |  Group 3: optional "=" auto-child suffix.
  */
-export const SOLE_BLOCK_REF = /^\s*\(\(([a-zA-Z0-9_-]{9})\)\)(\(\d+\))?\s*$/;
+export const SOLE_BLOCK_REF = /^\s*\(\(([a-zA-Z0-9_-]{9})\)\)(\(\d+\))?(=)?\s*$/;
 
 /**
- * Sole body is a bare [[page]], optionally followed by (n).
+ * Sole body is a bare [[page]], optionally followed by (n) and/or =.
  * Anchored — use against the trimmed or-body.
- * Group 1: [[page]]  |  Group 2: optional "(n)" depth suffix.
+ * Group 1: [[page]]  |  Group 2: optional "(n)" depth suffix  |  Group 3: optional "=" auto-child suffix.
  */
-export const SOLE_PAGE_REF = /^\s*(\[\[.*?\]\])(\(\d+\))?\s*$/;
+export const SOLE_PAGE_REF = /^\s*(\[\[.*?\]\])(\(\d+\))?(=)?\s*$/;
 
 /**
  * attr: source in the or-body, either initial or selected state.
  * Matches "attr:name" or "attr:[[name]]", optionally preceded by "| ".
  * Group 1: the raw attribute token.
+ * Group 2: optional "=" auto-child suffix.
  */
-export const ATTR_SOURCE = /(?:^|\|)\s*attr:(\[\[.*?\]\]|[^\|\}\s]+)/;
+export const ATTR_SOURCE = /(?:^|\|)\s*attr:(\[\[.*?\]\]|[^\|\}\s]+?)(=)?(?=\s*\}\}|\s*$)/;
 
 // ── [[…]] stripping helpers ────────────────────────────────────────────────
 

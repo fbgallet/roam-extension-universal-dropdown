@@ -33,6 +33,34 @@ export function getBlockContent(uid) {
   ];
 }
 
+export async function updateBlock(uid, string) {
+  try {
+    return await window.roamAlphaAPI.updateBlock({ block: { uid, string } });
+  } catch (e) {
+    console.error("[universal-selector] updateBlock failed:", e);
+  }
+}
+
+export function getFocusedBlock() {
+  try {
+    return window.roamAlphaAPI.ui.getFocusedBlock();
+  } catch (e) {
+    console.error("[universal-selector] getFocusedBlock failed:", e);
+    return null;
+  }
+}
+
+export async function setBlockFocusAndSelection(uid, windowId, cursorStart) {
+  try {
+    return await window.roamAlphaAPI.ui.setBlockFocusAndSelection({
+      location: { "block-uid": uid, "window-id": windowId },
+      selection: { start: cursorStart },
+    });
+  } catch (e) {
+    console.error("[universal-selector] setBlockFocusAndSelection failed:", e);
+  }
+}
+
 /**
  * Append a new child block to parentUid and return the new block's uid.
  */
@@ -116,6 +144,17 @@ export function removeOneBracket(str) {
 
 export function addOneBracket(str) {
   return `[${str.trim()}]`;
+}
+
+/**
+ * Get the direct parent block uid of a block.
+ * Returns null if the block has no parent (e.g. it is a top-level page block).
+ */
+export function getBlockParentUid(uid) {
+  const result = window.roamAlphaAPI.q(
+    `[:find ?pu :where [?b :block/uid "${uid}"] [?p :block/children ?b] [?p :block/uid ?pu]]`
+  );
+  return result?.[0]?.[0] ?? null;
 }
 
 export function currentBlockAttributeName(uid) {

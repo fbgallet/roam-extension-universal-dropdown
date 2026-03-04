@@ -4,6 +4,7 @@ import {
   isRoamReference,
   replaceOrComponentAt,
   appendChildBlock,
+  updateBlock,
 } from "./utils.js";
 import { getSetting } from "./index.js";
 import {
@@ -41,7 +42,16 @@ function flattenChildren(children, depth, result, maxDepth) {
 // --- Option click handlers ---
 
 // depthSuffix: "(n)" string to preserve in the output, e.g. "(2)", or "".
-export function handleBlockRefOptionClick(targetUid, selectedItem, refUid, asRef, depthSuffix = "", orIndex = 0) {
+// autoChild: when true, also append the selected value as a child block.
+export async function handleBlockRefOptionClick(
+  targetUid,
+  selectedItem,
+  refUid,
+  asRef,
+  depthSuffix = "",
+  orIndex = 0,
+  autoChild = false,
+) {
   const content = getBlockContent(targetUid);
 
   const useRef =
@@ -52,95 +62,142 @@ export function handleBlockRefOptionClick(targetUid, selectedItem, refUid, asRef
     ? `((${selectedItem.uid}))`
     : selectedItem.text.trim();
 
-  const newComponent = `{{or: ${insertText} | +((${refUid}))${depthSuffix}}}`;
+  const autoChildSuffix = autoChild ? "=" : "";
+  const newComponent = `{{or: ${insertText} | +((${refUid}))${depthSuffix}${autoChildSuffix}}}`;
   const newContent = replaceOrComponentAt(content, orIndex, newComponent);
-  console.log("[or-observer] Updating block to:", newContent);
 
-  window.roamAlphaAPI.updateBlock({
-    block: { uid: targetUid, string: newContent },
-  });
+  await updateBlock(targetUid, newContent);
+
+  if (autoChild) {
+    await handleChildOptionClick(
+      targetUid,
+      selectedItem.text,
+      useRef,
+      selectedItem.uid,
+    );
+  }
 }
 
 function isRefOrTag(text) {
   const t = text.trim();
-  return PAGE_REF_EXACT.test(t) || HASH_BRACKET_TAG_EXACT.test(t) || HASH_TAG_EXACT.test(t);
+  return (
+    PAGE_REF_EXACT.test(t) ||
+    HASH_BRACKET_TAG_EXACT.test(t) ||
+    HASH_TAG_EXACT.test(t)
+  );
 }
 
 function stripRefOrTag(text) {
   const t = text.trim();
   if (HASH_BRACKET_TAG_EXACT.test(t)) return t.slice(3, -2); // #[[long tag]] → long tag
-  if (PAGE_REF_EXACT.test(t))         return t.slice(2, -2); // [[page]] → page
-  if (HASH_TAG_EXACT.test(t))         return t.slice(1);     // #tag → tag
+  if (PAGE_REF_EXACT.test(t)) return t.slice(2, -2); // [[page]] → page
+  if (HASH_TAG_EXACT.test(t)) return t.slice(1); // #tag → tag
   return t;
 }
 
 // Alt+Space: replace the whole {{or:}} component with the selected value only
-export function handleKeepOptionClick(targetUid, selectedText, orIndex = 0) {
+export async function handleKeepOptionClick(
+  targetUid,
+  selectedText,
+  orIndex = 0,
+) {
   const content = getBlockContent(targetUid);
-  const newContent = replaceOrComponentAt(content, orIndex, selectedText.trim());
-  window.roamAlphaAPI.updateBlock({
-    block: { uid: targetUid, string: newContent },
-  });
+  const newContent = replaceOrComponentAt(
+    content,
+    orIndex,
+    selectedText.trim(),
+  );
+  await updateBlock(targetUid, newContent);
 }
 
 // Alt+Enter / Alt+Tab / Alt+click: append selected value as a new child block
-export async function handleChildOptionClick(targetUid, selectedText, asRef, selectedUid) {
+export async function handleChildOptionClick(
+  targetUid,
+  selectedText,
+  asRef,
+  selectedUid,
+) {
   const insertText =
     asRef && selectedUid ? `((${selectedUid}))` : selectedText.trim();
-
-  const existingChildren = window.roamAlphaAPI.q(
-    `[:find (pull ?b [:block/order]) :where [?p :block/uid "${targetUid}"] [?b :block/parents ?p]]`
-  );
-  const maxOrder = existingChildren.length
-    ? Math.max(...existingChildren.map((r) => r[0][":block/order"])) + 1
-    : 0;
-
-  await window.roamAlphaAPI.createBlock({
-    location: { "parent-uid": targetUid, order: maxOrder },
-    block: { string: insertText },
-  });
+  await appendChildBlock(targetUid, insertText);
 }
 
 /**
  * Add a new value to a block-ref list: append a child block to refUid, then select it.
  * If asRef (or insertAsRef setting), inserts ((uid)) reference instead of plain text.
  */
-export async function handleBlockRefAddValue(targetUid, newText, refUid, asRef, depthSuffix = "", orIndex = 0) {
+export async function handleBlockRefAddValue(
+  targetUid,
+  newText,
+  refUid,
+  asRef,
+  depthSuffix = "",
+  orIndex = 0,
+  autoChild = false,
+) {
   const newUid = await appendChildBlock(refUid, newText);
   const content = getBlockContent(targetUid);
   const useRef = asRef || getSetting("insertAsRef");
   const insertText = useRef ? `((${newUid}))` : newText;
-  const newComponent = `{{or: ${insertText} | +((${refUid}))${depthSuffix}}}`;
+  const autoChildSuffix = autoChild ? "=" : "";
+  const newComponent = `{{or: ${insertText} | +((${refUid}))${depthSuffix}${autoChildSuffix}}}`;
   const newContent = replaceOrComponentAt(content, orIndex, newComponent);
-  window.roamAlphaAPI.updateBlock({ block: { uid: targetUid, string: newContent } });
+  await updateBlock(targetUid, newContent);
+
+  if (autoChild) {
+    await handleChildOptionClick(targetUid, newText, useRef, newUid);
+  }
 }
 
 /**
  * Add a new value to a page-children list: append a child block to pageUid, then select it.
  * If asRef (or insertAsRef setting), inserts ((uid)) reference instead of plain text.
  */
-export async function handlePageRefAddValue(targetUid, newText, pageUid, pageRef, asRef, depthSuffix = "", orIndex = 0) {
+export async function handlePageRefAddValue(
+  targetUid,
+  newText,
+  pageUid,
+  pageRef,
+  asRef,
+  depthSuffix = "",
+  orIndex = 0,
+  autoChild = false,
+) {
   const newUid = await appendChildBlock(pageUid, newText);
   const content = getBlockContent(targetUid);
   const useRef = asRef || getSetting("insertAsRef");
   const insertText = useRef ? `((${newUid}))` : newText;
-  const newComponent = `{{or: ${insertText} | +${pageRef}${depthSuffix}}}`;
+  const autoChildSuffix = autoChild ? "=" : "";
+  const newComponent = `{{or: ${insertText} | +${pageRef}${depthSuffix}${autoChildSuffix}}}`;
   const newContent = replaceOrComponentAt(content, orIndex, newComponent);
-  window.roamAlphaAPI.updateBlock({ block: { uid: targetUid, string: newContent } });
+  await updateBlock(targetUid, newContent);
+
+  if (autoChild) {
+    await handleChildOptionClick(targetUid, newText, useRef, newUid);
+  }
 }
 
 /**
  * Handle a selection from an attr:-driven {{or:}} component.
  * Always produces {{or: value | +attr:[[attrName]]}} so the component stays re-clickable.
  */
-export function handleAttrOptionClick(targetUid, selectedItem, attrName, orIndex = 0) {
+export async function handleAttrOptionClick(
+  targetUid,
+  selectedItem,
+  attrName,
+  orIndex = 0,
+  autoChild = false,
+) {
   const content = getBlockContent(targetUid);
-  const newComponent = `{{or: ${selectedItem.text} | +attr:[[${attrName}]]}}`;
+  const autoChildSuffix = autoChild ? "=" : "";
+  const newComponent = `{{or: ${selectedItem.text} | +attr:[[${attrName}]]${autoChildSuffix}}}`;
   const newContent = replaceOrComponentAt(content, orIndex, newComponent);
 
-  window.roamAlphaAPI.updateBlock({
-    block: { uid: targetUid, string: newContent },
-  });
+  await updateBlock(targetUid, newContent);
+
+  if (autoChild) {
+    await handleChildOptionClick(targetUid, selectedItem.text, false, null);
+  }
 }
 
 /**
@@ -148,22 +205,39 @@ export function handleAttrOptionClick(targetUid, selectedItem, attrName, orIndex
  * Initial:  {{or: [[page]]}} or {{or: [[page]](n)}}
  * Selected: {{or: value | +[[page]]}} or {{or: value | +[[page]](n)}}
  */
-export function handlePageOptionClick(targetUid, selectedItem, pageRef, asRef, depthSuffix = "", orIndex = 0) {
+export async function handlePageOptionClick(
+  targetUid,
+  selectedItem,
+  pageRef,
+  asRef,
+  depthSuffix = "",
+  orIndex = 0,
+  autoChild = false,
+) {
   const content = getBlockContent(targetUid);
 
   const useRef =
     (asRef || getSetting("insertAsRef")) &&
     selectedItem.uid &&
     !isRoamReference(selectedItem.text);
-  const insertText = useRef ? `((${selectedItem.uid}))` : selectedItem.text.trim();
+  const insertText = useRef
+    ? `((${selectedItem.uid}))`
+    : selectedItem.text.trim();
 
-  const newComponent = `{{or: ${insertText} | +${pageRef}${depthSuffix}}}`;
+  const autoChildSuffix = autoChild ? "=" : "";
+  const newComponent = `{{or: ${insertText} | +${pageRef}${depthSuffix}${autoChildSuffix}}}`;
   const newContent = replaceOrComponentAt(content, orIndex, newComponent);
-  console.log("[or-observer] Updating block to:", newContent);
 
-  window.roamAlphaAPI.updateBlock({
-    block: { uid: targetUid, string: newContent },
-  });
+  await updateBlock(targetUid, newContent);
+
+  if (autoChild) {
+    await handleChildOptionClick(
+      targetUid,
+      selectedItem.text,
+      useRef,
+      selectedItem.uid,
+    );
+  }
 }
 
 /**
@@ -171,7 +245,12 @@ export function handlePageOptionClick(targetUid, selectedItem, pageRef, asRef, d
  * The new value becomes the first (selected) option with the canonical prefix applied.
  * Existing options are kept, stripped of their prefix if the list was all-refs/tags.
  */
-export function handleInlineAddValue(targetUid, newText, optionsArray, orIndex = 0) {
+export async function handleInlineAddValue(
+  targetUid,
+  newText,
+  optionsArray,
+  orIndex = 0,
+) {
   const content = getBlockContent(targetUid);
   const allAreRefs = optionsArray.every(isRefOrTag);
 
@@ -181,9 +260,9 @@ export function handleInlineAddValue(targetUid, newText, optionsArray, orIndex =
     // Strip any prefix the user may have typed, then apply the canonical one
     const bare = stripRefOrTag(newText);
     const first = optionsArray[0];
-    if (HASH_BRACKET_TAG_EXACT.test(first))      selectedText = `#[[${bare}]]`;
-    else if (PAGE_REF_EXACT.test(first))          selectedText = `[[${bare}]]`;
-    else if (HASH_TAG_EXACT.test(first))          selectedText = `#${bare}`;
+    if (HASH_BRACKET_TAG_EXACT.test(first)) selectedText = `#[[${bare}]]`;
+    else if (PAGE_REF_EXACT.test(first)) selectedText = `[[${bare}]]`;
+    else if (HASH_TAG_EXACT.test(first)) selectedText = `#${bare}`;
     rest = optionsArray.map(stripRefOrTag);
   } else {
     rest = [...optionsArray];
@@ -192,7 +271,7 @@ export function handleInlineAddValue(targetUid, newText, optionsArray, orIndex =
   const newOptionsArray = [selectedText, ...rest];
   const newComponent = `{{or: ${newOptionsArray.join(" | ")}}}`;
   const newContent = replaceOrComponentAt(content, orIndex, newComponent);
-  window.roamAlphaAPI.updateBlock({ block: { uid: targetUid, string: newContent } });
+  await updateBlock(targetUid, newContent);
 }
 
 /**
@@ -208,7 +287,14 @@ export function handleInlineAddValue(targetUid, newText, optionsArray, orIndex =
  * @param {boolean} asRef
  * @param {function} singleSelectFn  - called as singleSelectFn(item, asRef) when count===1 && !asChild
  */
-export async function handleRandomOptionClick(targetUid, items, count, asChild, asRef, singleSelectFn) {
+export async function handleRandomOptionClick(
+  targetUid,
+  items,
+  count,
+  asChild,
+  asRef,
+  singleSelectFn,
+) {
   const pool = items.filter((i) => !i.isHeader);
   if (pool.length === 0) return;
 
@@ -237,7 +323,12 @@ export async function handleRandomOptionClick(targetUid, items, count, asChild, 
   }
 }
 
-export function handleOptionClick(targetUid, optionsArray, selectedIndex, orIndex = 0) {
+export async function handleOptionClick(
+  targetUid,
+  optionsArray,
+  selectedIndex,
+  orIndex = 0,
+) {
   const content = getBlockContent(targetUid);
 
   const allAreRefs = optionsArray.every(isRefOrTag);
@@ -248,18 +339,16 @@ export function handleOptionClick(targetUid, optionsArray, selectedIndex, orInde
     newOptionsArray = newOptionsArray.concat(
       optionsArray
         .filter((_, index) => index !== selectedIndex)
-        .map(stripRefOrTag)
+        .map(stripRefOrTag),
     );
   } else {
     newOptionsArray = [optionsArray[selectedIndex]];
     newOptionsArray = newOptionsArray.concat(
-      optionsArray.filter((_, index) => index !== selectedIndex)
+      optionsArray.filter((_, index) => index !== selectedIndex),
     );
   }
 
   const newComponent = `{{or: ${newOptionsArray.join(" | ")}}}`;
   const newBlockContent = replaceOrComponentAt(content, orIndex, newComponent);
-  window.roamAlphaAPI.updateBlock({
-    block: { uid: targetUid, string: newBlockContent },
-  });
+  await updateBlock(targetUid, newBlockContent);
 }

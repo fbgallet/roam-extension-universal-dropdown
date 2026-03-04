@@ -5,8 +5,13 @@ import {
   normalizeUid,
   normalizeTitle,
   currentBlockAttributeName,
+  getBlockParentUid,
+  updateBlock,
+  getFocusedBlock,
+  setBlockFocusAndSelection,
 } from "./utils.js";
-import { startObserver, stopObserver } from "./observer.js";
+import { startObserver, stopObserver, triggerOrDropdownByIndex } from "./observer.js";
+import { OR_COMPONENT_GLOBAL_CAPTURE } from "./regex.js";
 import "../extension.css";
 
 let startUid,
@@ -35,6 +40,13 @@ const panelConfig = {
       name: "Always insert as block reference",
       description:
         "When enabled, selecting an item inserts its ((block reference)) instead of its content (unless it is already a reference or tag).",
+      action: { type: "switch" },
+    },
+    {
+      id: "showRandom",
+      name: "Show Random option",
+      description:
+        "When enabled, a Random row is shown in the dropdown for block-ref, page, and inline list sources. It is never shown for attribute (attr::) sources.",
       action: { type: "switch" },
     },
   ],
@@ -77,7 +89,7 @@ function sbInputBox(uid, l) {
   });
 }
 
-function insertItemInBlock(uid, item) {
+async function insertItemInBlock(uid, item) {
   if (item.includes("(Text from:((")) {
     item = item.slice(-14, -1);
   }
@@ -116,12 +128,7 @@ function insertItemInBlock(uid, item) {
   let button =
     "{{" + buttonCaption + ":SmartBlock:" + sbName + ":" + arg + "}}";
 
-  window.roamAlphaAPI.updateBlock({
-    block: {
-      uid: uid,
-      string: left + button + item + right,
-    },
-  });
+  await updateBlock(uid, left + button + item + right);
 }
 
 function hasItem(listArray, right) {
@@ -214,6 +221,89 @@ function removeSelectorButtonFromContent(s) {
   return s;
 }
 
+function showChildrenOrSiblingsDialog(refUid, targetUid, anchorElt) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText =
+    "position:fixed;inset:0;z-index:30;background:rgba(16,22,26,.4);display:flex;align-items:center;justify-content:center;";
+
+  const dialog = document.createElement("div");
+  dialog.className = "bp3-dialog";
+  dialog.style.cssText =
+    "background:white;border-radius:6px;padding:20px;min-width:300px;box-shadow:0 0 0 1px rgba(16,22,26,.1),0 4px 8px rgba(16,22,26,.2);";
+
+  const title = document.createElement("h4");
+  title.className = "bp3-heading";
+  title.textContent = "Create Universal Selector from\u2026";
+  title.style.marginBottom = "16px";
+
+  const btnChildren = document.createElement("button");
+  btnChildren.className = "bp3-button bp3-intent-primary";
+  btnChildren.textContent = "Children of this block";
+
+  const btnSiblings = document.createElement("button");
+  btnSiblings.className = "bp3-button";
+  btnSiblings.style.marginLeft = "8px";
+  btnSiblings.textContent = "Siblings (use parent)";
+
+  function dismiss() {
+    overlay.remove();
+    document.removeEventListener("keydown", onEsc);
+  }
+
+  function onEsc(e) {
+    if (e.key === "Escape") dismiss();
+  }
+
+  function insertAndOpen(sourceUid) {
+    dismiss();
+    // Blur any active textarea so Roam finishes its auto-save before we write
+    const active = document.activeElement;
+    if (active?.tagName === "TEXTAREA") active.blur();
+    // Wait for Roam's blur/auto-save to complete, then write our update
+    setTimeout(async () => {
+      // Re-read block content fresh — the captured `content` may be stale
+      const freshContent = getBlockContent(targetUid);
+      // Re-find the ((refUid)) position in the fresh content
+      const refRegex = new RegExp(`\\(\\(${refUid}\\)\\)`);
+      const freshMatch = freshContent.match(refRegex);
+      if (!freshMatch) return;
+      const freshStart = freshMatch.index;
+      const freshEnd = freshStart + freshMatch[0].length;
+      // Count {{or: }} components before the ref position for correct orIndex
+      const orsBefore = [...freshContent.slice(0, freshStart).matchAll(OR_COMPONENT_GLOBAL_CAPTURE)].length;
+      const newContent =
+        freshContent.slice(0, freshStart) + `{{or: ((${sourceUid}))}}` + freshContent.slice(freshEnd);
+      await updateBlock(targetUid, newContent);
+      setTimeout(() => {
+        const freshAnchor =
+          document.querySelector(`.roam-block[id$="${targetUid}"]`) ||
+          document.querySelector(`.rm-block-main[id$="${targetUid}"]`) ||
+          anchorElt;
+        triggerOrDropdownByIndex(targetUid, orsBefore, freshAnchor, newContent);
+      }, 300);
+    }, 200);
+  }
+
+  btnChildren.addEventListener("click", () => { insertAndOpen(refUid); });
+
+  btnSiblings.addEventListener("click", () => {
+    const parentUid = getBlockParentUid(refUid);
+    console.log("[or-observer] Siblings clicked. refUid:", refUid, "parentUid:", parentUid);
+    if (!parentUid) {
+      dismiss();
+      return;
+    }
+    insertAndOpen(parentUid);
+  });
+
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(); });
+  document.addEventListener("keydown", onEsc);
+
+  dialog.append(title, btnChildren, btnSiblings);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+}
+
 export default {
   onload: async ({ extensionAPI }) => {
     console.log("[universal-selector] >>> onload() called");
@@ -221,10 +311,88 @@ export default {
     await extensionAPI.settings.panel.create(panelConfig);
     if (extensionAPI.settings.get("insertAsRef") === null)
       await extensionAPI.settings.set("insertAsRef", false);
+    if (extensionAPI.settings.get("showRandom") === null)
+      await extensionAPI.settings.set("showRandom", true);
+
     extensionAPI.ui.commandPalette.addCommand({
-      label: "Universal Selector",
+      label: "Universal Selection: Insert or Open dropdown",
       callback: async () => {
-        startUid = window.roamAlphaAPI.ui.getFocusedBlock()?.["block-uid"];
+        const focusedBlock = getFocusedBlock();
+        const uid = focusedBlock?.["block-uid"];
+        if (!uid) return;
+
+        const content = getBlockContent(uid);
+        const textarea = document.querySelector("textarea.rm-block-input");
+        const cursorOffset = textarea?.selectionStart ?? 0;
+
+        // Use the textarea (or block element) as anchor for dropdown positioning
+        const anchorElt = textarea ||
+          document.querySelector(`.roam-block[id$="${uid}"]`) ||
+          document.body;
+
+        // Blur textarea before any updateBlock calls so Roam doesn't overwrite
+        if (textarea) textarea.blur();
+
+        // Case 1: Attribute block — insert {{or: }} after "::" and open dropdown
+        const attrName = currentBlockAttributeName(uid);
+        if (attrName !== "") {
+          const colonIdx = content.indexOf("::");
+          const insertPos = colonIdx + 2;
+          const newContent =
+            content.slice(0, insertPos) + " {{or: }}" + content.slice(insertPos);
+          await updateBlock(uid, newContent);
+          setTimeout(() => {
+            const freshAnchor =
+              document.querySelector(`.roam-block[id$="${uid}"]`) ||
+              document.querySelector(`.rm-block-main[id$="${uid}"]`) ||
+              anchorElt;
+            triggerOrDropdownByIndex(uid, 0, freshAnchor, newContent);
+          }, 300);
+          return;
+        }
+
+        // Case 2: Cursor inside an existing {{or: }} — open its dropdown
+        const orMatches = [...content.matchAll(OR_COMPONENT_GLOBAL_CAPTURE)];
+        for (let i = 0; i < orMatches.length; i++) {
+          const m = orMatches[i];
+          if (cursorOffset >= m.index && cursorOffset <= m.index + m[0].length) {
+            setTimeout(() => {
+              const freshAnchor =
+                document.querySelector(`.roam-block[id$="${uid}"]`) ||
+                document.querySelector(`.rm-block-main[id$="${uid}"]`) ||
+                anchorElt;
+              triggerOrDropdownByIndex(uid, i, freshAnchor);
+            }, 300);
+            return;
+          }
+        }
+
+        // Case 3: Cursor inside a ((block-ref)) — show children/siblings dialog
+        const blockRefGlobal = /\(\(([a-zA-Z0-9_-]{9})\)\)/g;
+        let refMatch;
+        while ((refMatch = blockRefGlobal.exec(content)) !== null) {
+          const refStart = refMatch.index;
+          const refEnd = refMatch.index + refMatch[0].length;
+          if (cursorOffset >= refStart && cursorOffset <= refEnd) {
+            setTimeout(() => showChildrenOrSiblingsDialog(refMatch[1], uid, anchorElt), 300);
+            return;
+          }
+        }
+
+        // Case 4: Default — insert {{or: }} at cursor, place cursor inside it
+        const newContent =
+          content.slice(0, cursorOffset) + "{{or: }}" + content.slice(cursorOffset);
+        await updateBlock(uid, newContent);
+        // Re-focus the block and position cursor inside {{or: }}
+        const cursorPos = cursorOffset + 6; // length of "{{or: " = 6 chars
+        await setBlockFocusAndSelection(uid, focusedBlock?.["window-id"], cursorPos);
+      },
+    });
+
+    extensionAPI.ui.commandPalette.addCommand({
+      label: "Universal Selector: SmartBlock",
+      callback: async () => {
+        startUid = getFocusedBlock()?.["block-uid"];
         let clipboard = await navigator.clipboard.readText();
         let blockref = normalizeUid(clipboard);
         if (clipboard.includes("::")) attribute = clipboard.replace("::", "");

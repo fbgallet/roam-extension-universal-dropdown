@@ -1,41 +1,142 @@
-# Universal Selector (Smartblocks dependent)
+# Universal Selector
 
-⚠️ This extension only works with 'Universal Selector' SmartBlocks: you need to install Smartblocks extension from RoamDepot first, then install 'Universal Selector' SmartBlocks from the SmartBlocks Store (open command palette with Ctrl-Cmd + P, then search for "SmartBlocks Store")
+Turn any list in your Roam graph into an interactive dropdown selector. Populate options from block references, page children, attribute values, or inline lists — all driven by Roam's native `{{or: }}` component.
 
-![selector gif](https://user-images.githubusercontent.com/74436347/182655439-db3e444f-5bba-4154-8136-44314fa080d8.gif)
+## How it works
 
-Easily **turn any list in your graph into a drop-down list** or **select attribute value among existing values** !
-This extended Smartblocks create a button to open the drop-down list of values and change the inserted item at will. The list is populated from a specified block reference or from the current values linked to a given attribute (page name followed by `::` at the beginning of a block, e.g. `page::`).
-Once the button is inserted in some block (the most relevant is to copy it into a template), you will access to the list of values just in one click !
+This extension enhances the built-in `{{or: }}` component in Roam Research. When you click on an `{{or: }}` element, a filterable dropdown menu appears with options sourced from various parts of your graph. After selecting a value, the component stays re-clickable so you can change it at any time.
 
-## Instructions
+## Source types
 
-There are two main SmartBlocks, `Universal Selector` open only a menu to choose between them:
+### 1. Block-reference children
 
-### `List Selector`
+Use a `((block-ref))` inside the or-component to populate the dropdown with the children of that block.
 
-- 1. Run this SmartBlock with `jj` trigger (or a customized one) or copy this button `{{🔽:SmartBlock:List Selector}}` anywhere in your graph. You will be asked to search, in an autocomplete box, the block reference of the parent block of the list whose values you want to extract.
+```
+{{or: ((block-uid))}}
+```
 
-- 2. Choose if you want to select immediatly a value from the list or if you want only to set a button for future use (e.g. if you insert it in a template). If you set a button, it will be inserted in the block, with the content of the parent block of the list as caption.
+After selecting a value:
 
-- 3. In the dropdown list, select the value that will be inserted into the current block where the cursor is positioned. **That's it!** You can use the keyboard only to select the item and validate (down/up arrow, tab and enter). Now you just have to click on the `🔽` button again to change the value.
+```
+{{or: Selected Value | +((block-uid))}}
+```
 
-- **If an item of the list contains only a block reference, the text content will be displayed** in the Dropdown list (with the mention: '(Text from:((block ref)))'), but only the block reference will be inserted.
+**Depth limit** — append `(n)` to restrict how many levels of children are fetched:
 
-- You can insert several buttons in the same block and use them as placeholders!
+```
+{{or: ((block-uid))(2)}}     ← only direct children and grandchildren
+```
 
-- If you doesn't need any more the button, click on it then click on 'Cancel', it will be removed.
+### 2. Page children
 
-### `Attribute values Selector`
+Use a `[[Page Name]]` to populate the dropdown with the children of that page.
 
-- 1. Run this SmartBlock or copy this button `{{🔽:SmartBlock:Attribute values Selector}}` anywhere in your graph (not necessarily in a block with an attribute).
+```
+{{or: [[My Options Page]]}}
+```
 
-- 2. Choose if you want to get the values of the current block's attribute (if the block has an attribute) or if you want to or if you want to enter an existing attribute. In this last case, an autocompletion box will allow you to search for a page name (with all existing pages, but not all are used as an attribute).
+After selecting:
 
-### Limitations and future developments
+```
+{{or: Selected Value | +[[My Options Page]]}}
+```
 
-- Currently in RoamJS SmartBlocks, dropdown list input is **single selector**. If you want to select **multiple values**, start from this button: `{{🔽➕:SmartBlock:Attribute values Selector:multi=true}}` or manually set `multi` variable parameter to `true` in an existing button, e.g.: `{{🔽➕My List:SmartBlock:Attribute values Selector:blockref=((PcSfPpMZ2)),multi=true}}`). Then, each click on the button will insert a new value before last values. (warning, if you insert these values into the current attribute, it will add these sets of values to the existing ones, which is not necessarily the desired behavior and can cause a partial replacement of subsets values. This issue will be fixed in a later version)
+Depth limiting works the same way: `{{or: [[Page]](3)}}`.
 
-- You can use the Command Palette (Ctrl-Cmd + P) `Universal selector` command to run the Smartblock of the same name. If there is a block reference in the clipboard, it will automatically run `List Selector` for the corresponding list parent block. If there is an attribute in the clipboard (with `::`), it will automatically run `Attribute values Selector` for the corresponding attribute. But in both cases, the button and value will be inserted at the beginning of the current block.
+### 3. Attribute values
 
-- This hypbrid extension with Smartblocks dependecies will soon be developed to work autonomously, without Smartblock, with a better UI.
+Use `attr:` followed by an attribute name to collect all existing values for that attribute across your graph.
+
+```
+{{or: attr:Status}}
+{{or: attr:[[Priority]]}}
+```
+
+After selecting:
+
+```
+{{or: Done | +attr:[[Status]]}}
+```
+
+**Auto-detection** — if the `{{or: }}` body is empty and the block is an attribute block (`Name:: {{or: }}`), the extension automatically detects the attribute and fetches its values.
+
+### 4. Inline list
+
+A simple pipe-separated list of options:
+
+```
+{{or: Option A | Option B | Option C}}
+```
+
+The selected value is rotated to the front. Supports automatic prefix inference for `[[page refs]]`, `#[[tags]]`, and `#tags`.
+
+## Auto-child extraction (`=` suffix)
+
+Append `=` after the source reference to **automatically create the selected value as a child block** of the current block, in addition to displaying it in the `{{or:}}` component. This is useful for extracting structured data from a dropdown into the block's children.
+
+```
+{{or: ((block-uid))=}}             ← auto-child from block-ref source
+{{or: [[Page]]=}}                  ← auto-child from page source
+{{or: [[Page]](2)=}}               ← auto-child with depth limit
+{{or: attr:Status=}}               ← auto-child from attribute source
+```
+
+After selecting, the `=` is preserved so subsequent selections keep appending children:
+
+```
+{{or: Selected Value | +((block-uid))=}}
+```
+
+Each time you select a value, it both updates the displayed value in the component and creates a new child block with that value under the current block.
+
+## Selection modes
+
+The dropdown supports multiple selection modes via keyboard/mouse modifiers:
+
+| Action | Mode | Behavior |
+|--------|------|----------|
+| Click / Enter | **Select** | Replace the current value in the component |
+| Shift+Enter / Shift+Backspace | **Keep** | Replace the entire `{{or:}}` component with the selected value (plain text) |
+| Alt+Click / Alt+Enter / Alt+Tab | **Child** | Append the selected value as a child block (without changing the component) |
+| Cmd/Ctrl + any action | **As reference** | Insert as `((block-ref))` instead of plain text |
+| Type + Enter (no matches) | **Add** | Create a new value in the source list and select it |
+
+## Hover action buttons
+
+When hovering over a selected `{{or:}}` component, action buttons appear:
+
+- **Keep (x)** — replaces the component with its current value as plain text
+- **Reset** — resets to the initial unselected state (source-backed components only)
+
+## Random selection
+
+For source-backed components, a **Random** row appears at the top of the dropdown with a stepper to pick 1 or more random items:
+
+- Click the Random row to select a random value
+- Use the +/- stepper to pick multiple random items (inserted as child blocks)
+- Hold Alt to force insertion as children even for single picks
+
+## Settings
+
+- **Always insert as block reference** — when enabled, selecting an item inserts its `((block reference))` instead of its text content (unless it is already a reference or tag). Can be toggled per-selection by holding Cmd/Ctrl.
+
+## Hierarchical source lists
+
+When the source block or page has a nested hierarchy:
+
+- **Headings** (blocks with heading format) are displayed as non-selectable group headers
+- **Indentation** reflects the depth of nested children
+- **Font size** decreases with depth for visual hierarchy
+
+## Legacy: SmartBlocks integration
+
+This extension originally relied on SmartBlocks for its dropdown functionality. The SmartBlocks-based commands (`List Selector`, `Attribute values Selector`) are still registered for backward compatibility if the SmartBlocks extension is installed. Users migrating from the SmartBlocks-based workflow can transition to the native `{{or: }}` syntax, which requires no external dependencies and provides a better user experience with filtering, keyboard navigation, and all the features described above.
+
+### Legacy SmartBlocks commands (deprecated)
+
+- **Universal Selector** — command palette entry that auto-detects block-ref or attribute from clipboard
+- **List Selector** — SmartBlock-driven dropdown from a block reference
+- **Attribute values Selector** — SmartBlock-driven dropdown from attribute values
+
+These commands require the [SmartBlocks extension](https://roamjs.com/extensions/smartblocks) to be installed.

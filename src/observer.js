@@ -5,6 +5,7 @@ import {
   getExistingValuesForAttribute,
   getPageUidByRef,
 } from "./utils.js";
+import { getSetting } from "./index.js";
 import { showOptionMenu } from "./components/optionMenu.js";
 import { attachActionButtons } from "./components/actionButtons.js";
 import {
@@ -63,7 +64,7 @@ export function startObserver() {
   });
 
   const existingOptions = Array.from(
-    document.getElementsByClassName("rm-option")
+    document.getElementsByClassName("rm-option"),
   );
   if (existingOptions.length > 0) {
     attachOptionListeners(existingOptions);
@@ -79,26 +80,351 @@ export function stopObserver() {
   }
 }
 
+/**
+ * Open the dropdown for the nth {{or: }} in a block directly, without needing
+ * a DOM .rm-option element. Uses the block's container element as anchor.
+ * Safe to call while the block is in edit mode (textarea active).
+ */
+export function triggerOrDropdownByIndex(
+  blockUid,
+  orIndex,
+  anchorElt,
+  knownContent,
+) {
+  const anchor =
+    anchorElt || document.querySelector(`.roam-block[id$="${blockUid}"]`);
+  if (!anchor) return;
+  openDropdownForBlock(blockUid, orIndex, anchor, knownContent);
+}
+
 // Detect the ref/tag syntax of the first (selected) option and re-apply it to
 // any options that were stripped. E.g. ["#b", "a", "c"] → ["#b", "#a", "#c"].
 function inferCanonicalOptions(rawOptions) {
   if (rawOptions.length === 0) return rawOptions;
   const first = rawOptions[0];
   let prefix = null;
-  if (HASH_BRACKET_TAG_EXACT.test(first)) prefix = "hash-bracket"; // #[[tag]]
-  else if (PAGE_REF_EXACT.test(first))    prefix = "bracket";      // [[page]]
-  else if (HASH_TAG_EXACT.test(first))    prefix = "hash";         // #tag
+  if (HASH_BRACKET_TAG_EXACT.test(first))
+    prefix = "hash-bracket"; // #[[tag]]
+  else if (PAGE_REF_EXACT.test(first))
+    prefix = "bracket"; // [[page]]
+  else if (HASH_TAG_EXACT.test(first)) prefix = "hash"; // #tag
   if (!prefix) return rawOptions;
 
   return rawOptions.map((opt) => {
-    if (prefix === "hash-bracket" && HASH_BRACKET_TAG_EXACT.test(opt)) return opt;
-    if (prefix === "bracket"      && PAGE_REF_EXACT.test(opt))         return opt;
-    if (prefix === "hash"         && HASH_TAG_EXACT.test(opt))         return opt;
+    if (prefix === "hash-bracket" && HASH_BRACKET_TAG_EXACT.test(opt))
+      return opt;
+    if (prefix === "bracket" && PAGE_REF_EXACT.test(opt)) return opt;
+    if (prefix === "hash" && HASH_TAG_EXACT.test(opt)) return opt;
     if (prefix === "hash-bracket") return `#[[${opt}]]`;
-    if (prefix === "bracket")      return `[[${opt}]]`;
-    if (prefix === "hash")         return `#${opt}`;
+    if (prefix === "bracket") return `[[${opt}]]`;
+    if (prefix === "hash") return `#${opt}`;
     return opt;
   });
+}
+
+/**
+ * Open the dropdown for the nth {{or: }} component in a block.
+ * anchorElt is used to position the menu (getBoundingClientRect).
+ * Safe to call at any time — does not depend on .rm-option DOM elements.
+ */
+function openDropdownForBlock(targetUid, orIndex, anchorElt, knownContent) {
+  const content = knownContent ?? getBlockContent(targetUid);
+  //console.log("[or-observer] openDropdownForBlock. uid:", targetUid, "orIndex:", orIndex, "content:", content);
+
+  const allOrMatches = [...content.matchAll(OR_COMPONENT_GLOBAL_CAPTURE)];
+
+  if (allOrMatches.length === 0) return;
+
+  const safeIndex = orIndex >= 0 && orIndex < allOrMatches.length ? orIndex : 0;
+  const orMatch = allOrMatches[safeIndex];
+  const orBody = orMatch[1];
+  const orBodyTrimmed = orBody.trim();
+
+  // ── 1. Attribute-block auto-feed ────────────────────────────────────────
+  if (orBodyTrimmed === "") {
+    const autoAttr = currentBlockAttributeName(targetUid);
+    if (autoAttr !== "") {
+      const values = getExistingValuesForAttribute(autoAttr);
+
+      const items = values.map((v) => ({ text: v, depth: 0, isHeader: false }));
+      showOptionMenu(
+        anchorElt,
+        items,
+        (selectedItem, _asRef, mode) => {
+          if (mode === "keep")
+            handleKeepOptionClick(targetUid, selectedItem.text, safeIndex);
+          else if (mode === "child")
+            handleChildOptionClick(targetUid, selectedItem.text, false, null);
+          else
+            handleAttrOptionClick(targetUid, selectedItem, autoAttr, safeIndex);
+        },
+        true,
+      );
+      return;
+    }
+  }
+
+  // ── 2. +attr: source ────────────────────────────────────────────────────
+  const attrMatch = orBody.match(PLUS_ATTR) || orBody.match(ATTR_SOURCE);
+  if (attrMatch) {
+    const rawAttr = attrMatch[1].trim();
+    const attrName = rawAttr.replace(STRIP_PAGE_REF_BRACKETS, "$1");
+    const autoChild = attrMatch[2] === "=";
+    const values = getExistingValuesForAttribute(attrName);
+
+    const items = values.map((v) => ({ text: v, depth: 0, isHeader: false }));
+    const isAttrBlock = currentBlockAttributeName(targetUid) !== "";
+    showOptionMenu(
+      anchorElt,
+      items,
+      (selectedItem, _asRef, mode) => {
+        if (mode === "keep")
+          handleKeepOptionClick(targetUid, selectedItem.text, safeIndex);
+        else if (mode === "child")
+          handleChildOptionClick(targetUid, selectedItem.text, false, null);
+        else
+          handleAttrOptionClick(
+            targetUid,
+            selectedItem,
+            attrName,
+            safeIndex,
+            autoChild,
+          );
+      },
+      true,
+      !isAttrBlock && getSetting("showRandom") !== false
+        ? (count, altKey) => {
+            handleRandomOptionClick(
+              targetUid,
+              items,
+              count,
+              altKey,
+              false,
+              (item) =>
+                handleAttrOptionClick(
+                  targetUid,
+                  item,
+                  attrName,
+                  safeIndex,
+                  autoChild,
+                ),
+            );
+          }
+        : null,
+    );
+    return;
+  }
+
+  // ── 3. +((uid))(n)= / bare ((uid))(n)= — block-ref children ──────────────
+  const blockRefMatch =
+    orBody.match(PLUS_BLOCK_REF) ||
+    (!orBody.includes("|") && orBody.match(SOLE_BLOCK_REF));
+  if (blockRefMatch) {
+    const refUid = blockRefMatch[1];
+    const depthSuffix = blockRefMatch[2] || "";
+    const autoChild = blockRefMatch[3] === "=";
+    const maxDepth = parseDepth(depthSuffix);
+
+    const children = getChildrenFromUid(refUid, maxDepth);
+
+    showOptionMenu(
+      anchorElt,
+      children,
+      (selectedItem, asRef, mode) => {
+        if (mode === "keep") {
+          const useRef =
+            asRef && selectedItem.uid && !isRoamReference(selectedItem.text);
+          const text = useRef
+            ? `((${selectedItem.uid}))`
+            : selectedItem.text.trim();
+          handleKeepOptionClick(targetUid, text, safeIndex);
+        } else if (mode === "child") {
+          handleChildOptionClick(
+            targetUid,
+            selectedItem.text,
+            asRef,
+            selectedItem.uid,
+          );
+        } else if (mode === "add") {
+          handleBlockRefAddValue(
+            targetUid,
+            selectedItem.text,
+            refUid,
+            asRef,
+            depthSuffix,
+            safeIndex,
+            autoChild,
+          );
+        } else {
+          handleBlockRefOptionClick(
+            targetUid,
+            selectedItem,
+            refUid,
+            asRef,
+            depthSuffix,
+            safeIndex,
+            autoChild,
+          );
+        }
+      },
+      true,
+      getSetting("showRandom") !== false
+        ? (count, altKey) => {
+            handleRandomOptionClick(
+              targetUid,
+              children,
+              count,
+              altKey,
+              false,
+              (item, asRef) =>
+                handleBlockRefOptionClick(
+                  targetUid,
+                  item,
+                  refUid,
+                  asRef,
+                  depthSuffix,
+                  safeIndex,
+                  autoChild,
+                ),
+            );
+          }
+        : null,
+    );
+    return;
+  }
+
+  // ── 4. +[[page]](n)= / bare [[page]](n)= — page-children ─────────────────
+  const pageMatch =
+    orBody.match(PLUS_PAGE_REF) ||
+    (!orBody.includes("|") && orBody.match(SOLE_PAGE_REF));
+  if (pageMatch) {
+    const pageRef = pageMatch[1];
+    const depthSuffix = pageMatch[2] || "";
+    const autoChild = pageMatch[3] === "=";
+    const maxDepth = parseDepth(depthSuffix);
+
+    const pageUid = getPageUidByRef(pageRef);
+    if (!pageUid) return;
+    const children = getChildrenFromUid(pageUid, maxDepth);
+    showOptionMenu(
+      anchorElt,
+      children,
+      (selectedItem, asRef, mode) => {
+        if (mode === "keep") {
+          const useRef =
+            asRef && selectedItem.uid && !isRoamReference(selectedItem.text);
+          const text = useRef
+            ? `((${selectedItem.uid}))`
+            : selectedItem.text.trim();
+          handleKeepOptionClick(targetUid, text, safeIndex);
+        } else if (mode === "child") {
+          handleChildOptionClick(
+            targetUid,
+            selectedItem.text,
+            asRef,
+            selectedItem.uid,
+          );
+        } else if (mode === "add") {
+          handlePageRefAddValue(
+            targetUid,
+            selectedItem.text,
+            pageUid,
+            pageRef,
+            asRef,
+            depthSuffix,
+            safeIndex,
+            autoChild,
+          );
+        } else {
+          handlePageOptionClick(
+            targetUid,
+            selectedItem,
+            pageRef,
+            asRef,
+            depthSuffix,
+            safeIndex,
+            autoChild,
+          );
+        }
+      },
+      true,
+      getSetting("showRandom") !== false
+        ? (count, altKey) => {
+            handleRandomOptionClick(
+              targetUid,
+              children,
+              count,
+              altKey,
+              false,
+              (item, asRef) =>
+                handlePageOptionClick(
+                  targetUid,
+                  item,
+                  pageRef,
+                  asRef,
+                  depthSuffix,
+                  safeIndex,
+                  autoChild,
+                ),
+            );
+          }
+        : null,
+    );
+    return;
+  }
+
+  // ── 5. Standard inline options ──────────────────────────────────────────
+  const rawOptions = orBody.split("|").map((o) => o.trim());
+  const optionsArray = inferCanonicalOptions(rawOptions);
+  const items = optionsArray.map((text) => ({
+    text,
+    depth: 0,
+    isHeader: false,
+  }));
+  showOptionMenu(
+    anchorElt,
+    items,
+    (selectedItem, _asRef, mode) => {
+      if (mode === "keep")
+        handleKeepOptionClick(targetUid, selectedItem.text, safeIndex);
+      else if (mode === "child")
+        handleChildOptionClick(targetUid, selectedItem.text, false, null);
+      else if (mode === "add")
+        handleInlineAddValue(
+          targetUid,
+          selectedItem.text,
+          optionsArray,
+          safeIndex,
+        );
+      else {
+        const selectedIndex = optionsArray.indexOf(selectedItem.text);
+        if (selectedIndex === -1) return;
+        handleOptionClick(targetUid, optionsArray, selectedIndex, safeIndex);
+      }
+    },
+    true,
+    getSetting("showRandom") !== false
+      ? (count, altKey) => {
+          handleRandomOptionClick(
+            targetUid,
+            items,
+            count,
+            altKey,
+            false,
+            (item) => {
+              const selectedIndex = optionsArray.indexOf(item.text);
+              if (selectedIndex === -1) return;
+              handleOptionClick(
+                targetUid,
+                optionsArray,
+                selectedIndex,
+                safeIndex,
+              );
+            },
+          );
+        }
+      : null,
+  );
 }
 
 function attachOptionListeners(optionElts) {
@@ -111,159 +437,20 @@ function attachOptionListeners(optionElts) {
     elt.addEventListener("click", (evt) => {
       const block = evt.target.closest(".roam-block");
       if (!block) return;
-      const targetUid = block.id.slice(-9);
-
-      const content = getBlockContent(targetUid);
-      console.log("[or-observer] Click. Block content:", content);
-
-      // Find all {{or: ...}} components in the block content
-      const allOrMatches = [...content.matchAll(OR_COMPONENT_GLOBAL_CAPTURE)];
-      if (allOrMatches.length === 0) return;
-
-      // Determine which {{or: }} was clicked by matching DOM order of .rm-option elements
-      const allOptionElts = Array.from(block.getElementsByClassName("rm-option"));
-      const orIndex = allOptionElts.indexOf(evt.target.closest(".rm-option"));
-      const safeIndex = orIndex >= 0 && orIndex < allOrMatches.length ? orIndex : 0;
-
-      const orMatch = allOrMatches[safeIndex];
-      const orBody = orMatch[1];
-      const orBodyTrimmed = orBody.trim();
-
-      // ── 1. Attribute-block auto-feed ────────────────────────────────────────
-      // "attrName:: {{or: }}" — body is empty, block is an attribute block.
-      if (orBodyTrimmed === "") {
-        const autoAttr = currentBlockAttributeName(targetUid);
-        if (autoAttr !== "") {
-          evt.stopPropagation();
-          evt.preventDefault();
-          const values = getExistingValuesForAttribute(autoAttr);
-          console.log("[or-observer] Auto-feed attr mode. Attribute:", autoAttr, "Values:", values);
-          const items = values.map((v) => ({ text: v, depth: 0, isHeader: false }));
-          showOptionMenu(evt.target, items, (selectedItem, _asRef, mode) => {
-            if (mode === "keep") handleKeepOptionClick(targetUid, selectedItem.text, safeIndex);
-            else if (mode === "child") handleChildOptionClick(targetUid, selectedItem.text, false, null);
-            else handleAttrOptionClick(targetUid, selectedItem, autoAttr, safeIndex);
-          }, true, (count, altKey) => {
-            handleRandomOptionClick(targetUid, items, count, altKey, false,
-              (item) => handleAttrOptionClick(targetUid, item, autoAttr, safeIndex));
-          });
-          return;
-        }
-      }
-
-      // ── 2. +attr: source ────────────────────────────────────────────────────
-      // Initial:  {{or: attr:name}} / {{or: attr:[[name]]}}
-      // Selected: {{or: value | +attr:[[name]]}}
-      const attrMatch = orBody.match(PLUS_ATTR) || orBody.match(ATTR_SOURCE);
-      if (attrMatch) {
-        evt.stopPropagation();
-        evt.preventDefault();
-        const rawAttr = attrMatch[1].trim();
-        const attrName = rawAttr.replace(STRIP_PAGE_REF_BRACKETS, "$1");
-        const values = getExistingValuesForAttribute(attrName);
-        console.log("[or-observer] attr: mode. Attribute:", attrName, "Values:", values);
-        const items = values.map((v) => ({ text: v, depth: 0, isHeader: false }));
-        showOptionMenu(evt.target, items, (selectedItem, _asRef, mode) => {
-          if (mode === "keep") handleKeepOptionClick(targetUid, selectedItem.text, safeIndex);
-          else if (mode === "child") handleChildOptionClick(targetUid, selectedItem.text, false, null);
-          else handleAttrOptionClick(targetUid, selectedItem, attrName, safeIndex);
-        }, true, (count, altKey) => {
-          handleRandomOptionClick(targetUid, items, count, altKey, false,
-            (item) => handleAttrOptionClick(targetUid, item, attrName, safeIndex));
-        });
-        return;
-      }
-
-      // ── 3. +((uid))(n) / bare ((uid))(n) — block-ref children ───────────────
-      // Initial:  {{or: ((uid))}} or {{or: ((uid))(2)}}
-      // Selected: {{or: value | +((uid))}} or {{or: value | +((uid))(2)}}
-      const blockRefMatch = orBody.match(PLUS_BLOCK_REF) ||
-                            (!orBody.includes("|") && orBody.match(SOLE_BLOCK_REF));
-      if (blockRefMatch) {
-        evt.stopPropagation();
-        evt.preventDefault();
-        const refUid = blockRefMatch[1];
-        const depthSuffix = blockRefMatch[2] || "";
-        const maxDepth = parseDepth(depthSuffix);
-        console.log("[or-observer] Block ref mode. Ref UID:", refUid, "maxDepth:", maxDepth);
-        const children = getChildrenFromUid(refUid, maxDepth);
-        console.log("[or-observer] Children:", children);
-        showOptionMenu(evt.target, children, (selectedItem, asRef, mode) => {
-          if (mode === "keep") {
-            const useRef = asRef && selectedItem.uid && !isRoamReference(selectedItem.text);
-            const text = useRef ? `((${selectedItem.uid}))` : selectedItem.text.trim();
-            handleKeepOptionClick(targetUid, text, safeIndex);
-          } else if (mode === "child") {
-            handleChildOptionClick(targetUid, selectedItem.text, asRef, selectedItem.uid);
-          } else if (mode === "add") {
-            handleBlockRefAddValue(targetUid, selectedItem.text, refUid, asRef, depthSuffix, safeIndex);
-          } else {
-            handleBlockRefOptionClick(targetUid, selectedItem, refUid, asRef, depthSuffix, safeIndex);
-          }
-        }, true, (count, altKey) => {
-          handleRandomOptionClick(targetUid, children, count, altKey, false,
-            (item, asRef) => handleBlockRefOptionClick(targetUid, item, refUid, asRef, depthSuffix, safeIndex));
-        });
-        return;
-      }
-
-      // ── 4. +[[page]](n) / bare [[page]](n) — page-children ──────────────────
-      // Initial:  {{or: [[page]]}} or {{or: [[page]](3)}}
-      // Selected: {{or: value | +[[page]]}} or {{or: value | +[[page]](3)}}
-      const pageMatch = orBody.match(PLUS_PAGE_REF) ||
-                        (!orBody.includes("|") && orBody.match(SOLE_PAGE_REF));
-      if (pageMatch) {
-        evt.stopPropagation();
-        evt.preventDefault();
-        const pageRef = pageMatch[1]; // e.g. "[[My Page]]"
-        const depthSuffix = pageMatch[2] || "";
-        const maxDepth = parseDepth(depthSuffix);
-        console.log("[or-observer] Page mode. Page ref:", pageRef, "maxDepth:", maxDepth);
-        const pageUid = getPageUidByRef(pageRef);
-        if (!pageUid) return;
-        const children = getChildrenFromUid(pageUid, maxDepth);
-        showOptionMenu(evt.target, children, (selectedItem, asRef, mode) => {
-          if (mode === "keep") {
-            const useRef = asRef && selectedItem.uid && !isRoamReference(selectedItem.text);
-            const text = useRef ? `((${selectedItem.uid}))` : selectedItem.text.trim();
-            handleKeepOptionClick(targetUid, text, safeIndex);
-          } else if (mode === "child") {
-            handleChildOptionClick(targetUid, selectedItem.text, asRef, selectedItem.uid);
-          } else if (mode === "add") {
-            handlePageRefAddValue(targetUid, selectedItem.text, pageUid, pageRef, asRef, depthSuffix, safeIndex);
-          } else {
-            handlePageOptionClick(targetUid, selectedItem, pageRef, asRef, depthSuffix, safeIndex);
-          }
-        }, true, (count, altKey) => {
-          handleRandomOptionClick(targetUid, children, count, altKey, false,
-            (item, asRef) => handlePageOptionClick(targetUid, item, pageRef, asRef, depthSuffix, safeIndex));
-        });
-        return;
-      }
-
-      // ── 5. Standard inline options ──────────────────────────────────────────
       evt.stopPropagation();
       evt.preventDefault();
-      const rawOptions = orBody.split("|").map((o) => o.trim());
-      const optionsArray = inferCanonicalOptions(rawOptions);
-      const items = optionsArray.map((text) => ({ text, depth: 0, isHeader: false }));
-      showOptionMenu(evt.target, items, (selectedItem, _asRef, mode) => {
-        if (mode === "keep") handleKeepOptionClick(targetUid, selectedItem.text, safeIndex);
-        else if (mode === "child") handleChildOptionClick(targetUid, selectedItem.text, false, null);
-        else if (mode === "add") handleInlineAddValue(targetUid, selectedItem.text, optionsArray, safeIndex);
-        else {
-          const selectedIndex = optionsArray.indexOf(selectedItem.text);
-          if (selectedIndex === -1) return;
-          handleOptionClick(targetUid, optionsArray, selectedIndex, safeIndex);
-        }
-      }, true, (count, altKey) => {
-        handleRandomOptionClick(targetUid, items, count, altKey, false,
-          (item) => {
-            const selectedIndex = optionsArray.indexOf(item.text);
-            if (selectedIndex === -1) return;
-            handleOptionClick(targetUid, optionsArray, selectedIndex, safeIndex);
-          });
-      });
+
+      const targetUid = block.id.slice(-9);
+      const allOptionElts = Array.from(
+        block.getElementsByClassName("rm-option"),
+      );
+      const orIndex = allOptionElts.indexOf(evt.target.closest(".rm-option"));
+
+      openDropdownForBlock(
+        targetUid,
+        orIndex,
+        evt.target.closest(".rm-option"),
+      );
     });
   });
 }
