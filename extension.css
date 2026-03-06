@@ -94,6 +94,14 @@
   justify-content: center;
 }
 
+.or-menu-hint {
+  font-size: 10px;
+  color: #a7b6c2;
+  text-align: center;
+  padding: 3px 6px;
+  border-top: 1px solid #eee;
+}
+
 /* Dark mode (Roam Studio .rs-dark) */
 
 .rs-dark .or-action-btn {
@@ -106,6 +114,11 @@
 
 .rs-dark .or-random-row {
   background: #30404d;
+}
+
+.rs-dark .or-menu-hint {
+  color: #5c7080;
+  border-top-color: rgba(255, 255, 255, 0.1);
 }
 
 .rs-dark .or-random-btn {

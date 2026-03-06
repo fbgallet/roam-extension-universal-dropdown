@@ -19,6 +19,7 @@ import { OR_COMPONENT_GLOBAL_CAPTURE } from "./regex.js";
 import {
   showChoiceDialog,
   showSourceTypeDialog,
+  showAttrSourceTypeDialog,
 } from "./components/choiceDialog.js";
 import "../extension.css";
 
@@ -308,23 +309,51 @@ export default {
         // Blur textarea before any updateBlock calls so Roam doesn't overwrite
         if (textarea) textarea.blur();
 
-        // Case 1: Attribute block — insert {{or: }} after "::" and open dropdown
+        // Case 1: Attribute block — ask source type, then insert
         const attrName = currentBlockAttributeName(uid);
         if (attrName !== "") {
           const colonIdx = content.indexOf("::");
           const insertPos = colonIdx + 2;
-          const newContent =
-            content.slice(0, insertPos) +
-            " {{or: }}" +
-            content.slice(insertPos);
-          await updateBlock(uid, newContent);
-          setTimeout(() => {
-            const freshAnchor =
-              document.querySelector(`.roam-block[id$="${uid}"]`) ||
-              document.querySelector(`.rm-block-main[id$="${uid}"]`) ||
-              anchorElt;
-            triggerOrDropdownByIndex(uid, 0, freshAnchor, newContent);
-          }, 150);
+          const windowId = focusedBlock?.["window-id"];
+
+          async function insertAttrAndOpen(template) {
+            const newContent =
+              content.slice(0, insertPos) +
+              " " +
+              template +
+              content.slice(insertPos);
+            await updateBlock(uid, newContent);
+            setTimeout(() => {
+              const freshAnchor =
+                document.querySelector(`.roam-block[id$="${uid}"]`) ||
+                document.querySelector(`.rm-block-main[id$="${uid}"]`) ||
+                anchorElt;
+              triggerOrDropdownByIndex(uid, 0, freshAnchor, newContent);
+            }, 150);
+          }
+
+          async function insertAttrTemplate(template, selectStart, selectLen) {
+            const newContent =
+              content.slice(0, insertPos) +
+              " " +
+              template +
+              content.slice(insertPos);
+            await updateBlock(uid, newContent);
+            await setBlockFocusAndSelection(
+              uid,
+              windowId,
+              insertPos + 1 + selectStart,
+              insertPos + 1 + selectStart + selectLen,
+            );
+          }
+
+          showAttrSourceTypeDialog(
+            attrName,
+            () => insertAttrAndOpen(`{{or: attr:[[${attrName}]]}}`),
+            () => insertAttrTemplate("{{or: (())}}", 8, 0),
+            () => insertAttrTemplate("{{or: [[]](2)}}", 8, 0),
+            () => insertAttrTemplate("{{or: Option A | B | C}}", 6, 8),
+          );
           return;
         }
 
@@ -399,15 +428,13 @@ export default {
         const uid = args?.["block-uid"];
         if (!uid) return "";
 
-        // Case 1: Attribute block — insert {{or: }} after "::" and open dropdown
+        // Case 1: Attribute block — ask source type, then insert
         const attrName = currentBlockAttributeName(uid);
         if (attrName !== "") {
           const content = getBlockContent(uid);
           const colonIdx = content.indexOf("::");
-          const newContent =
-            content.slice(0, colonIdx + 2) +
-            " {{or: }}" +
-            content.slice(colonIdx + 2);
+          const insertPos = colonIdx + 2;
+          const windowId = args?.["window-id"];
           // Capture a positioned proxy from the textarea before Roam dismisses the slash UI
           // (the block re-enters edit mode after updateBlock, so .roam-block won't be in the DOM)
           const proxyAnchor = (() => {
@@ -420,13 +447,51 @@ export default {
             document.body.appendChild(el);
             return el;
           })();
+
+          function insertAttrSlashAndOpen(template) {
+            const newContent =
+              content.slice(0, insertPos) +
+              " " +
+              template +
+              content.slice(insertPos);
+            setTimeout(() => {
+              updateBlock(uid, newContent).then(() => {
+                setTimeout(() => {
+                  triggerOrDropdownByIndex(uid, 0, proxyAnchor, newContent);
+                  proxyAnchor.remove();
+                }, 300);
+              });
+            }, 50);
+          }
+
+          async function insertAttrSlashTemplate(
+            template,
+            selectStart,
+            selectLen,
+          ) {
+            proxyAnchor.remove();
+            const newContent =
+              content.slice(0, insertPos) +
+              " " +
+              template +
+              content.slice(insertPos);
+            await updateBlock(uid, newContent);
+            await setBlockFocusAndSelection(
+              uid,
+              windowId,
+              insertPos + 1 + selectStart,
+              insertPos + 1 + selectStart + selectLen,
+            );
+          }
+
           setTimeout(() => {
-            updateBlock(uid, newContent).then(() => {
-              setTimeout(() => {
-                triggerOrDropdownByIndex(uid, 0, proxyAnchor, newContent);
-                proxyAnchor.remove();
-              }, 300);
-            });
+            showAttrSourceTypeDialog(
+              attrName,
+              () => insertAttrSlashAndOpen(`{{or: attr:[[${attrName}]]}}`),
+              () => insertAttrSlashTemplate("{{or: (())}}", 8, 0),
+              () => insertAttrSlashTemplate("{{or: [[]](2)}}", 8, 0),
+              () => insertAttrSlashTemplate("{{or: Option A | B | C}}", 6, 8),
+            );
           }, 50);
           return "";
         }
@@ -465,7 +530,7 @@ export default {
 
         setTimeout(() => {
           showSourceTypeDialog(
-            () => insertSlashTemplate("{{or: Option A | B | C}}", 5, 6),
+            () => insertSlashTemplate("{{or: Option A | B | C}}", 5, 8),
             () => insertSlashTemplate("{{or: (())}}", 7, 0),
             () => insertSlashTemplate("{{or: [[]](2)}}", 7, 0),
             () => insertSlashTemplate("{{or: attr:[[]]}}", 12, 0),

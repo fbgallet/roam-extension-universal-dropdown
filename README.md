@@ -91,7 +91,15 @@ The selected value is rotated to the front. Options can be simple text, block re
 
 Available inline while editing a block by typing `/Universal Selector`:
 
-- **Inside an attribute block** (`Attr:: ...`): inserts `{{or: }}` after `::` and opens the dropdown pre-filled with attribute values.
+- **Inside an attribute block** (`Attr:: ...`): opens a **source type dialog** pre-scoped to that attribute:
+
+| Key   | Source type      | Behavior                                                                                   |
+| ----- | ---------------- | ------------------------------------------------------------------------------------------ |
+| **A** | Attribute values | Inserts `{{or: attr:[[Attr]]}}` with the attribute name filled in, and opens the dropdown  |
+| **B** | Block reference  | Inserts `{{or: ((` _cursor_ `))}}` — cursor placed inside the ref markers                 |
+| **P** | Page children    | Inserts `{{or: [[` _cursor_ `]](2)}}` — cursor inside the page-name brackets (depth 2)    |
+| **I** | Inline list      | Inserts `{{or: Option A \| B \| C}}` — "Option A" pre-selected, ready to type             |
+
 - **Anywhere else** — opens a **source type dialog** so you can choose what kind of selector to insert:
 
 | Key   | Source type      | Inserted template                                                              |
@@ -111,7 +119,7 @@ A smart command that adapts to the current block and cursor position:
 
 - **Cursor inside an existing `{{or: }}`** — opens its dropdown directly without modifying the block.
 - **Cursor inside a `((block-ref))`** — opens a dialog to pick options from the referenced block's children or siblings.
-- **Inside an attribute block** (`Attr:: ...`) — inserts `{{or: }}` right after `::` and immediately opens the dropdown pre-filled with all existing values for that attribute across your graph.
+- **Inside an attribute block** (`Attr:: ...`) — opens the same source type dialog as the slash command, pre-scoped to that attribute (A auto-fills the attribute name and opens the dropdown; B, P, I position the cursor for manual entry).
 - **Anywhere else** — opens the same **source type dialog** as the slash command (four source types: inline list, block reference, page children, attribute values).
 
 Bind this command to a keyboard shortcut in Roam's hotkey settings for fast access.

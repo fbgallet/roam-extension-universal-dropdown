@@ -18,7 +18,13 @@ let activeMenu = null;
  * @param {function|null} [onRandom=null] - If provided, a "Random" row is shown at the top.
  *   Called as onRandom(count, altKey) where count is the number of random items to pick.
  */
-export function showOptionMenu(anchorElt, items, onSelect, allowAdd = false, onRandom = null) {
+export function showOptionMenu(
+  anchorElt,
+  items,
+  onSelect,
+  allowAdd = false,
+  onRandom = null,
+) {
   dismiss();
 
   const rect = anchorElt.getBoundingClientRect();
@@ -86,12 +92,21 @@ export function showOptionMenu(anchorElt, items, onSelect, allowAdd = false, onR
     btnPlus.textContent = "+";
 
     function updateCount(delta) {
-      randomCount = Math.max(1, Math.min(items.length || 1, randomCount + delta));
+      randomCount = Math.max(
+        1,
+        Math.min(items.length || 1, randomCount + delta),
+      );
       countDisplay.textContent = String(randomCount);
     }
 
-    btnMinus.addEventListener("click", (e) => { e.stopPropagation(); updateCount(-1); });
-    btnPlus.addEventListener("click", (e) => { e.stopPropagation(); updateCount(1); });
+    btnMinus.addEventListener("click", (e) => {
+      e.stopPropagation();
+      updateCount(-1);
+    });
+    btnPlus.addEventListener("click", (e) => {
+      e.stopPropagation();
+      updateCount(1);
+    });
 
     stepper.appendChild(btnMinus);
     stepper.appendChild(countDisplay);
@@ -157,12 +172,17 @@ export function showOptionMenu(anchorElt, items, onSelect, allowAdd = false, onR
         const li = document.createElement("li");
         const a = document.createElement("a");
         a.className = "bp3-menu-item";
-        a.style.cssText = "padding:5px 7px;cursor:pointer;display:block;font-style:italic;";
+        a.style.cssText =
+          "padding:5px 7px;cursor:pointer;display:block;font-style:italic;";
         a.textContent = `Add "${filter.trim()}"`;
         a.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
-          onSelect({ text: filter.trim(), depth: 0, isHeader: false }, e.metaKey || e.ctrlKey, "add");
+          onSelect(
+            { text: filter.trim(), depth: 0, isHeader: false },
+            e.metaKey || e.ctrlKey,
+            "add",
+          );
           dismiss();
         });
         li.appendChild(a);
@@ -249,7 +269,11 @@ export function showOptionMenu(anchorElt, items, onSelect, allowAdd = false, onR
         onSelect(selectable[highlightIndex], e.metaKey || e.ctrlKey, mode);
         dismiss();
       } else if (allowAdd && input.value.trim() && selectable.length === 0) {
-        onSelect({ text: input.value.trim(), depth: 0, isHeader: false }, e.metaKey || e.ctrlKey, "add");
+        onSelect(
+          { text: input.value.trim(), depth: 0, isHeader: false },
+          e.metaKey || e.ctrlKey,
+          "add",
+        );
         dismiss();
       }
     } else if (e.key === "Tab" && e.altKey) {
@@ -265,8 +289,14 @@ export function showOptionMenu(anchorElt, items, onSelect, allowAdd = false, onR
 
   renderItems("");
 
+  // Keyboard hint footer
+  const hint = document.createElement("div");
+  hint.className = "or-menu-hint";
+  hint.textContent = "+Shift:Keep · Alt+Tab:Child · +Ctrl:Ref";
+
   if (!onRandom) activeMenu.appendChild(inputGroup);
   activeMenu.appendChild(menuList);
+  activeMenu.appendChild(hint);
   document.body.appendChild(activeOverlay);
   document.body.appendChild(activeMenu);
 

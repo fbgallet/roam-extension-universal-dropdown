@@ -24,15 +24,14 @@ export function showChoiceDialogMulti(title, choices, handlers) {
 
   const hint = document.createElement("p");
   hint.className = "or-choice-hint";
-  hint.textContent = "Press the highlighted key or click a button.";
+  hint.textContent = "Press the highlighted key, use arrow keys + Enter, or click a button.";
 
   const btnRow = document.createElement("div");
   btnRow.className = "or-choice-btn-row";
 
-  function makeButton({ label, key, primary, description }) {
+  function makeButton({ label, key, description }) {
     const btn = document.createElement("button");
-    btn.className =
-      "bp3-button or-choice-btn" + (primary ? " bp3-intent-primary" : "");
+    btn.className = "bp3-button or-choice-btn";
 
     const topRow = document.createElement("div");
     topRow.className = "or-choice-btn-top";
@@ -59,12 +58,21 @@ export function showChoiceDialogMulti(title, choices, handlers) {
 
   function dismiss() {
     overlay.remove();
-    document.removeEventListener("keydown", onKey);
+    document.removeEventListener("keydown", onKey, true);
   }
 
   function choose(fn) {
     dismiss();
     fn();
+  }
+
+  let focusedIndex = 0;
+
+  function setFocus(index) {
+    buttons[focusedIndex].classList.remove("bp3-intent-primary");
+    focusedIndex = index;
+    buttons[focusedIndex].classList.add("bp3-intent-primary");
+    buttons[focusedIndex].focus();
   }
 
   function onKey(e) {
@@ -82,21 +90,16 @@ export function showChoiceDialogMulti(title, choices, handlers) {
       }
     }
     if (e.key === "Enter" || e.key === " ") {
-      const focused = buttons.indexOf(document.activeElement);
-      if (focused !== -1) {
-        e.preventDefault();
-        choose(handlers[focused]);
-      }
+      e.preventDefault();
+      choose(handlers[focusedIndex]);
       return;
     }
     if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "Tab") {
       e.preventDefault();
-      const focused = buttons.indexOf(document.activeElement);
-      buttons[(focused + 1) % buttons.length].focus();
+      setFocus((focusedIndex + 1) % buttons.length);
     } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
       e.preventDefault();
-      const focused = buttons.indexOf(document.activeElement);
-      buttons[(focused - 1 + buttons.length) % buttons.length].focus();
+      setFocus((focusedIndex - 1 + buttons.length) % buttons.length);
     }
   }
 
@@ -115,14 +118,14 @@ export function showChoiceDialogMulti(title, choices, handlers) {
     }
   });
 
-  document.addEventListener("keydown", onKey);
+  document.addEventListener("keydown", onKey, true);
 
   buttons.forEach((btn) => btnRow.appendChild(btn));
   dialog.append(heading, hint, btnRow);
   overlay.appendChild(dialog);
   document.body.appendChild(overlay);
 
-  buttons[0].focus();
+  setFocus(0);
 }
 
 /**
@@ -137,6 +140,30 @@ export function showChoiceDialog(title, choice1, choice2, onChoice1, onChoice2) 
   showChoiceDialogMulti(title, [choice1, choice2], [onChoice1, onChoice2]);
 }
 
+const SOURCE_CHOICES = {
+  inline: {
+    label: "Inline list",
+    key: "I",
+    description: "{{or: Option A | Option B | Option C}}",
+  },
+  blockRef: {
+    label: "Block reference",
+    key: "B",
+    description: "{{or: ((block-uid))}}",
+  },
+  page: {
+    label: "Page children",
+    key: "P",
+    description:
+      "{{or: [[Page Name]](2)}}\nLimited to 2 levels by default \u2014 customizable, e.g. (3) or remove for all.",
+  },
+  attr: {
+    label: "Attribute values",
+    key: "A",
+    description: "{{or: attr:[[Attribute]]}}",
+  },
+};
+
 /**
  * Show a dialog for choosing the source type for a new {{or: }} component.
  * @param {function} onInlineList   — called when user picks "Inline list"
@@ -148,28 +175,37 @@ export function showSourceTypeDialog(onInlineList, onBlockRef, onPage, onAttribu
   showChoiceDialogMulti(
     "Universal Selector \u2014 Choose source type\u2026",
     [
-      {
-        label: "Inline list",
-        key: "I",
-        primary: true,
-        description: "{{or: Option A | Option B | Option C}}",
-      },
-      {
-        label: "Block reference",
-        key: "B",
-        description: "{{or: ((block-uid))}}",
-      },
-      {
-        label: "Page children",
-        key: "P",
-        description: "{{or: [[Page Name]](2)}}\nLimited to 2 levels by default \u2014 customizable, e.g. (3) or remove for all.",
-      },
-      {
-        label: "Attribute values",
-        key: "A",
-        description: "{{or: attr:[[Attribute]]}}",
-      },
+      { ...SOURCE_CHOICES.inline, primary: true },
+      SOURCE_CHOICES.blockRef,
+      SOURCE_CHOICES.page,
+      SOURCE_CHOICES.attr,
     ],
     [onInlineList, onBlockRef, onPage, onAttribute],
+  );
+}
+
+/**
+ * Show a dialog for choosing the source type when the block is an attribute block.
+ * "Attribute values" is shown first (primary) with an auto-feed description.
+ * @param {string}   attrName      — attribute name shown in the title and description
+ * @param {function} onAttribute   — "Attribute values" (auto-feed from existing values)
+ * @param {function} onBlockRef    — "Block reference"
+ * @param {function} onPage        — "Page children"
+ * @param {function} onInlineList  — "Inline list"
+ */
+export function showAttrSourceTypeDialog(attrName, onAttribute, onBlockRef, onPage, onInlineList) {
+  showChoiceDialogMulti(
+    `Universal Selector \u2014 ${attrName} \u2014 Choose source type\u2026`,
+    [
+      {
+        ...SOURCE_CHOICES.attr,
+        primary: true,
+        description: `{{or: attr:[[${attrName}]]}} \u2014 auto-feed from existing values`,
+      },
+      SOURCE_CHOICES.blockRef,
+      SOURCE_CHOICES.page,
+      SOURCE_CHOICES.inline,
+    ],
+    [onAttribute, onBlockRef, onPage, onInlineList],
   );
 }
