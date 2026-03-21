@@ -16,6 +16,8 @@
  *   +[[page]](n)?    page children source, optional depth limit
  *   +attr:name       attribute values source (bare name)
  *   +attr:[[name]]   attribute values source (page-reference form)
+ *   +query:((uid))   Roam native query source (query block reference)
+ *   query:((uid))    initial-state query source (no pipe yet)
  */
 
 // ── Roam primitive patterns ────────────────────────────────────────────────
@@ -109,6 +111,21 @@ export const SOLE_PAGE_REF = /^\s*(\[\[.*?\]\])(\(\d+\))?(=)?\s*$/;
  * Group 2: optional "=" auto-child suffix.
  */
 export const ATTR_SOURCE = /(?:^|\|)\s*attr:(\[\[.*?\]\]|[^\|\}\s]+?)(=)?(?=\s*\}\}|\s*$)/;
+
+// ── query:((uid)) source detection ──────────────────────────────────────────
+
+/**
+ * +query:((uid)) — query source (selected state, after a pipe).
+ * Group 1: uid
+ */
+export const PLUS_QUERY = /\+query:\(\(([a-zA-Z0-9_-]{9})\)\)/;
+
+/**
+ * query:((uid)) — query source in any position (initial state or after a pipe).
+ * Matches "query:((uid))" optionally preceded by "| ".
+ * Group 1: uid
+ */
+export const QUERY_SOURCE = /(?:^|\|)\s*query:\(\(([a-zA-Z0-9_-]{9})\)\)/;
 
 // ── [[…]] stripping helpers ────────────────────────────────────────────────
 

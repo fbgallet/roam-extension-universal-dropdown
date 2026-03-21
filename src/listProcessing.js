@@ -1,6 +1,7 @@
 import {
   getBlockContent,
   getChildrenTree,
+  sortChildrenByOrder,
   isRoamReference,
   replaceOrComponentAt,
   appendChildBlock,
@@ -20,6 +21,7 @@ import {
 export function getChildrenFromUid(uid, maxDepth = null) {
   const tree = getChildrenTree(uid);
   if (!tree || !tree[0] || !tree[0][0] || !tree[0][0].children) return [];
+  sortChildrenByOrder(tree[0][0].children);
   const result = [];
   flattenChildren(tree[0][0].children, 0, result, maxDepth);
   return result;
@@ -29,14 +31,80 @@ function flattenChildren(children, depth, result, maxDepth) {
   if (!children) return;
   for (const child of children) {
     if (child.string && child.string.trim() !== "") {
-      const isHeader = child.heading != null && child.heading > 0;
-      result.push({ text: child.string, depth, isHeader, uid: child.uid });
+      result.push({ text: child.string, depth, isHeader: false, uid: child.uid });
       const withinLimit = maxDepth === null || depth < maxDepth - 1;
       if (withinLimit && child.children && child.children.length > 0) {
         flattenChildren(child.children, depth + 1, result, maxDepth);
       }
     }
   }
+}
+
+// --- Query results processing ---
+
+/**
+ * Convert roamQuery results (grouped by page) into a flat items array
+ * with page titles as group headers.
+ * @param {Array} results - results array from roamQuery (each entry is a page group)
+ * @param {boolean} pageHeadersSelectable - if true, page titles are selectable items
+ * @returns {Array<{text, depth, isHeader, uid}>}
+ */
+export function getItemsFromQueryResults(results, pageHeadersSelectable) {
+  if (!results || results.length === 0) return [];
+
+  // Results are a flat array of blocks, each with :block/page containing page info.
+  // Group them by page for display.
+  const pageMap = new Map(); // pageUid → { pageTitle, pageUid, blocks: [] }
+
+  for (const entry of results) {
+    const blockStr = entry[":block/string"] || "";
+    const blockUid = entry[":block/uid"] || "";
+    const editTime = entry[":edit/time"] || 0;
+    const page = entry[":block/page"] || {};
+    const pageTitle = page[":node/title"] || "Unknown";
+    const pageUid = page[":block/uid"] || "";
+
+    if (!blockStr.trim()) continue;
+
+    if (!pageMap.has(pageUid)) {
+      pageMap.set(pageUid, { pageTitle, pageUid, blocks: [] });
+    }
+    pageMap.get(pageUid).blocks.push({ text: blockStr, uid: blockUid, editTime });
+  }
+
+  // Sort blocks within each page by edit time descending
+  const pageGroups = [...pageMap.values()];
+  for (const group of pageGroups) {
+    group.blocks.sort((a, b) => b.editTime - a.editTime);
+    group.mostRecentEdit = group.blocks.length > 0 ? group.blocks[0].editTime : 0;
+  }
+
+  // Sort page groups by most recent block edit time (descending)
+  pageGroups.sort((a, b) => b.mostRecentEdit - a.mostRecentEdit);
+
+  const items = [];
+  for (const group of pageGroups) {
+    // Page title header
+    items.push({
+      text: `[[${group.pageTitle}]]`,
+      depth: 0,
+      isHeader: !pageHeadersSelectable,
+      uid: group.pageUid,
+    });
+
+    // Block results under this page
+    for (const block of group.blocks) {
+      items.push({
+        text: block.text,
+        depth: 1,
+        isHeader: false,
+        uid: block.uid,
+        editTime: block.editTime,
+      });
+    }
+  }
+
+  return items;
 }
 
 // --- Option click handlers ---
@@ -55,7 +123,7 @@ export async function handleBlockRefOptionClick(
   const content = getBlockContent(targetUid);
 
   const useRef =
-    (asRef || getSetting("insertAsRef")) &&
+    asRef !== getSetting("insertAsRef") &&
     selectedItem.uid &&
     !isRoamReference(selectedItem.text);
   const insertText = useRef
@@ -124,7 +192,7 @@ export async function handleChildOptionClick(
 
 /**
  * Add a new value to a block-ref list: append a child block to refUid, then select it.
- * If asRef (or insertAsRef setting), inserts ((uid)) reference instead of plain text.
+ * If asRef toggles the insertAsRef setting, inserts ((uid)) reference instead of plain text.
  */
 export async function handleBlockRefAddValue(
   targetUid,
@@ -137,7 +205,7 @@ export async function handleBlockRefAddValue(
 ) {
   const newUid = await appendChildBlock(refUid, newText);
   const content = getBlockContent(targetUid);
-  const useRef = asRef || getSetting("insertAsRef");
+  const useRef = asRef !== getSetting("insertAsRef");
   const insertText = useRef ? `((${newUid}))` : newText;
   const autoChildSuffix = autoChild ? "=" : "";
   const newComponent = `{{or: ${insertText} | +((${refUid}))${depthSuffix}${autoChildSuffix}}}`;
@@ -151,7 +219,7 @@ export async function handleBlockRefAddValue(
 
 /**
  * Add a new value to a page-children list: append a child block to pageUid, then select it.
- * If asRef (or insertAsRef setting), inserts ((uid)) reference instead of plain text.
+ * If asRef toggles the insertAsRef setting, inserts ((uid)) reference instead of plain text.
  */
 export async function handlePageRefAddValue(
   targetUid,
@@ -165,7 +233,7 @@ export async function handlePageRefAddValue(
 ) {
   const newUid = await appendChildBlock(pageUid, newText);
   const content = getBlockContent(targetUid);
-  const useRef = asRef || getSetting("insertAsRef");
+  const useRef = asRef !== getSetting("insertAsRef");
   const insertText = useRef ? `((${newUid}))` : newText;
   const autoChildSuffix = autoChild ? "=" : "";
   const newComponent = `{{or: ${insertText} | +${pageRef}${depthSuffix}${autoChildSuffix}}}`;
@@ -175,6 +243,33 @@ export async function handlePageRefAddValue(
   if (autoChild) {
     await handleChildOptionClick(targetUid, newText, useRef, newUid);
   }
+}
+
+/**
+ * Handle a selection from a query-driven {{or:}} component.
+ * Produces: {{or: selectedValue | +query:((queryUid))}}
+ */
+export async function handleQueryOptionClick(
+  targetUid,
+  selectedItem,
+  queryUid,
+  asRef,
+  orIndex = 0,
+) {
+  const content = getBlockContent(targetUid);
+
+  const useRef =
+    asRef !== getSetting("insertAsRef") &&
+    selectedItem.uid &&
+    !isRoamReference(selectedItem.text);
+  const insertText = useRef
+    ? `((${selectedItem.uid}))`
+    : selectedItem.text.trim();
+
+  const newComponent = `{{or: ${insertText} | +query:((${queryUid}))}}`;
+  const newContent = replaceOrComponentAt(content, orIndex, newComponent);
+
+  await updateBlock(targetUid, newContent);
 }
 
 /**
@@ -217,7 +312,7 @@ export async function handlePageOptionClick(
   const content = getBlockContent(targetUid);
 
   const useRef =
-    (asRef || getSetting("insertAsRef")) &&
+    asRef !== getSetting("insertAsRef") &&
     selectedItem.uid &&
     !isRoamReference(selectedItem.text);
   const insertText = useRef
@@ -314,9 +409,8 @@ export async function handleRandomOptionClick(
   }
 
   // Multiple items (or Alt held): insert each as a child block.
-  // Resolve asRef: use passed flag OR the global setting, but only when the
-  // item is not itself already a block-ref / page-ref / tag.
-  const useRef = asRef || getSetting("insertAsRef");
+  // Resolve asRef: Cmd/Ctrl toggles the global setting; skip if already a reference.
+  const useRef = asRef !== getSetting("insertAsRef");
   for (const item of picked) {
     const insertAsRef = useRef && !isRoamReference(item.text);
     await handleChildOptionClick(targetUid, item.text, insertAsRef, item.uid);

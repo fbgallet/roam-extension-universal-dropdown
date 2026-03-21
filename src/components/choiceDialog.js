@@ -24,7 +24,8 @@ export function showChoiceDialogMulti(title, choices, handlers) {
 
   const hint = document.createElement("p");
   hint.className = "or-choice-hint";
-  hint.textContent = "Press the highlighted key, use arrow keys + Enter, or click a button.";
+  hint.textContent =
+    "Press the highlighted key, use arrow keys + Enter, or click a button.";
 
   const btnRow = document.createElement("div");
   btnRow.className = "or-choice-btn-row";
@@ -136,7 +137,13 @@ export function showChoiceDialogMulti(title, choices, handlers) {
  * @param {function} onChoice1
  * @param {function} onChoice2
  */
-export function showChoiceDialog(title, choice1, choice2, onChoice1, onChoice2) {
+export function showChoiceDialog(
+  title,
+  choice1,
+  choice2,
+  onChoice1,
+  onChoice2,
+) {
   showChoiceDialogMulti(title, [choice1, choice2], [onChoice1, onChoice2]);
 }
 
@@ -149,7 +156,8 @@ const SOURCE_CHOICES = {
   blockRef: {
     label: "Block reference",
     key: "B",
-    description: "{{or: ((block-uid))}}",
+    description:
+      "{{or: ((block-uid))}}\nIf referenced block contains a query, results will be used as options",
   },
   page: {
     label: "Page children",
@@ -171,7 +179,12 @@ const SOURCE_CHOICES = {
  * @param {function} onPage         — called when user picks "Page children"
  * @param {function} onAttribute    — called when user picks "Attribute values"
  */
-export function showSourceTypeDialog(onInlineList, onBlockRef, onPage, onAttribute) {
+export function showSourceTypeDialog(
+  onInlineList,
+  onBlockRef,
+  onPage,
+  onAttribute,
+) {
   showChoiceDialogMulti(
     "Universal Selector \u2014 Choose source type\u2026",
     [
@@ -193,7 +206,13 @@ export function showSourceTypeDialog(onInlineList, onBlockRef, onPage, onAttribu
  * @param {function} onPage        — "Page children"
  * @param {function} onInlineList  — "Inline list"
  */
-export function showAttrSourceTypeDialog(attrName, onAttribute, onBlockRef, onPage, onInlineList) {
+export function showAttrSourceTypeDialog(
+  attrName,
+  onAttribute,
+  onBlockRef,
+  onPage,
+  onInlineList,
+) {
   showChoiceDialogMulti(
     `Universal Selector \u2014 ${attrName} \u2014 Choose source type\u2026`,
     [

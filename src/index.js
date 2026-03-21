@@ -1,5 +1,6 @@
 import {
   getChildrenTree,
+  sortChildrenByOrder,
   getBlockContent,
   getBlocksIncludingText,
   normalizeUid,
@@ -56,6 +57,13 @@ const panelConfig = {
       name: "Show Random option",
       description:
         "When enabled, a Random row is shown in the dropdown for block-ref, page, and inline list sources. It is never shown for attribute (attr::) sources.",
+      action: { type: "switch" },
+    },
+    {
+      id: "queryPageHeadersSelectable",
+      name: "Query results: page titles are selectable",
+      description:
+        "When enabled, page title headers in query-sourced dropdowns are selectable items. When disabled, they are non-selectable group headers.",
       action: { type: "switch" },
     },
   ],
@@ -156,6 +164,7 @@ function hasItem(listArray, right) {
 
 function getItemsArray(uid) {
   let blocks = getChildrenTree(uid);
+  sortChildrenByOrder(blocks[0][0].children);
   return getItemsFromChildrenBlocks(blocks[0][0].children);
 }
 
@@ -288,6 +297,8 @@ export default {
       await extensionAPI.settings.set("insertAsRef", false);
     if (extensionAPI.settings.get("showRandom") === null)
       await extensionAPI.settings.set("showRandom", true);
+    if (extensionAPI.settings.get("queryPageHeadersSelectable") === null)
+      await extensionAPI.settings.set("queryPageHeadersSelectable", false);
 
     extensionAPI.ui.commandPalette.addCommand({
       label: "Universal Selector: Insert or Open dropdown",

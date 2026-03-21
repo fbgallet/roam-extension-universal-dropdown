@@ -21,10 +21,25 @@ export function replaceOrComponentAt(content, orIndex, newComponent) {
 
 export function getChildrenTree(uid) {
   const q = `[:find (pull ?page
-                    [:block/uid :block/string :block/heading :block/children
+                    [:block/uid :block/string :block/heading :block/order :block/children
           {:block/children ...} ])
                   :where [?page :block/uid "${uid}"]  ]`;
   return window.roamAlphaAPI.q(q);
+}
+
+/**
+ * Sort an array of children blocks by :block/order in place and return it.
+ * Works recursively on nested children.
+ */
+export function sortChildrenByOrder(children) {
+  if (!children) return children;
+  children.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  for (const child of children) {
+    if (child.children) {
+      sortChildrenByOrder(child.children);
+    }
+  }
+  return children;
 }
 
 export function getBlockContent(uid) {
@@ -120,7 +135,12 @@ export function normalizeTitle(str) {
  * into a DOM element using the Roam Alpha API.
  */
 export function renderRoamString(el, string) {
-  window.roamAlphaAPI.ui.components.renderString({ el, string });
+  try {
+    window.roamAlphaAPI.ui.components.renderString({ el, string });
+  } catch (e) {
+    // Fallback to plain text if Roam's renderer chokes (e.g. null references)
+    el.textContent = string || "";
+  }
 }
 
 /**
@@ -134,6 +154,50 @@ export function isRoamReference(text) {
     HASH_BRACKET_TAG_EXACT.test(trimmed) ||
     HASH_TAG_EXACT.test(trimmed)
   );
+}
+
+/**
+ * Check if a block contains a Roam native query ({{[[query]]: ...}}).
+ */
+export function isQueryBlock(uid) {
+  const content = getBlockContent(uid);
+  return content != null && content.includes("{{[[query]]:");
+}
+
+/**
+ * Extract the title from a query block's content.
+ * Supports: {{[[query]]: "title" {pattern}}} or {{[[query]]: {pattern}}}
+ * Returns the quoted title if present, otherwise the query pattern itself.
+ */
+export function extractQueryTitle(uid) {
+  const content = getBlockContent(uid);
+  if (!content) return "query";
+  // Try to extract quoted title: {{[[query]]: "title" {pattern}}}
+  const quotedMatch = content.match(/\{\{(?:\[\[query\]\]):\s*"([^"]+)"/);
+  if (quotedMatch) return quotedMatch[1];
+  // Fallback: extract page/tag references from the query pattern as a readable label
+  // e.g. {and: [[project]] [[active]]} → "project, active"
+  const patternMatch = content.match(/\{\{(?:\[\[query\]\]):\s*(\{.+\})\s*\}\}/);
+  if (patternMatch) {
+    const refs = [...patternMatch[1].matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1]);
+    if (refs.length > 0) return refs.join(", ");
+  }
+  return "query";
+}
+
+/**
+ * Run a Roam native query using the stored settings of a query block.
+ * Returns { total, results } where results follow the pull pattern.
+ */
+export async function runRoamQuery(uid, limit = 100) {
+  const result = await window.roamAlphaAPI.data.roamQuery({
+    uid,
+    limit,
+    pull: "[:block/uid :block/string :edit/time :node/title {:block/page [:node/title :block/uid]}]",
+  });
+  console.log("[universal-selector] roamQuery uid:", uid, "limit:", limit,
+    "returned:", result?.results?.length, "total:", result?.total);
+  return result;
 }
 
 export function normalizePageRef(str) {
@@ -208,6 +272,7 @@ export function getExistingValuesForAttribute(attrName) {
       const tree = getChildrenTree(uid);
       const children = tree?.[0]?.[0]?.children;
       if (children) {
+        sortChildrenByOrder(children);
         for (const child of children) {
           const childStr = child.string?.trim();
           if (childStr) values.add(childStr);

@@ -1,14 +1,19 @@
 # Universal Selector
 
-Turn any list in your Roam graph into an interactive dropdown selector. Populate options from block references, page children, attribute values, or inline lists — all driven by Roam's native `{{or: }}` component, enhanced with autocomplete, page reference parsing (only the selected option is referenced), random pick, insert in children, buttons to reset or keep only the selected option...
+Turn any list in your Roam graph into an interactive dropdown selector. Populate options from block references, page children, attribute values, queries, or inline lists — all driven by Roam's native `{{or: }}` component, enhanced with autocomplete, sorting, hierarchical filtering, page reference parsing (only the selected option is referenced), random pick, insert in children, buttons to reset or keep only the selected option...
 
-### 🆕 New in v.3 (March 2026)
+### 🆕 New in v.4 (April 2026)
+
+- Query support: use any Roam query as a dropdown source
+- Sort button in the dropdown (default block order, by last edited, alphabetical)
+- Improved filter: hierarchical filtering for nested lists, multi-keyword search, exact match with quotes
+
+### v.3 (March 2026) MAJOR UPDATE
 
 - Migration from SmartBlock buttons (no more needed) to native `{{or: }}` component
 - Added a lot of features and a new syntax (see below), to make it way more intuitiv and powerful.
 
 ![Universal Selector short demo](https://github.com/user-attachments/assets/d294226d-ef4b-40c3-9d4b-2342c82cec57)
-
 
 ## How it works
 
@@ -36,7 +41,10 @@ After selecting a value:
 {{or: ((block-uid))(2)}}     ← only direct children and grandchildren
 ```
 
-> ![NOTE]
+> [!NOTE]
+> If the referenced block is a **query block** (contains a `{{[[query]]: ...}}`), it is automatically converted to a query source (see below).
+
+> [!NOTE]
 > When the source block or page has a nested hierarchy:
 >
 > - **Indentation** reflects the depth of nested children
@@ -75,7 +83,25 @@ After selecting:
 
 **Auto-detection** — if the `{{or: }}` body is empty and the block is an attribute block (`Name:: {{or: }}`), the extension automatically detects the attribute and fetches its values.
 
-### 4. Inline list
+### 4. Query results
+
+If the block reference is a **query block** (a block containing `{{[[query]]: ...}}`), the dropdown is populated with the query results, grouped by page.
+
+```
+{{or: ((query-block-uid))}}
+```
+
+After selecting:
+
+```
+{{or: Selected Value | +query:((query-block-uid))}}
+```
+
+You don't need to write this syntax manually — just use a `((block-ref))` pointing to a query block and it will be automatically rewritten to the query syntax, displaying the query title (or pattern if no title) as initial value.
+
+The first 100 results are displayed immediately; the full result set is loaded in the background so that filtering, sorting and random selection cover all matches.
+
+### 5. Inline list
 
 A simple pipe-separated list of options:
 
@@ -93,9 +119,9 @@ Available inline while editing a block by typing `/Universal Selector`:
 
 - **Inside an attribute block** (`Attr:: ...`): opens a **source type dialog** pre-scoped to that attribute:
 
-| Key   | Source type      | Behavior                                                                                   |
-| ----- | ---------------- | ------------------------------------------------------------------------------------------ |
-| **A** | Attribute values | Inserts `{{or: attr:[[Attr]]}}` with the attribute name filled in, and opens the dropdown  |
+| Key   | Source type      | Behavior                                                                                  |
+| ----- | ---------------- | ----------------------------------------------------------------------------------------- |
+| **A** | Attribute values | Inserts `{{or: attr:[[Attr]]}}` with the attribute name filled in, and opens the dropdown |
 | **B** | Block reference  | Inserts `{{or: ((` _cursor_ `))}}` — cursor placed inside the ref markers                 |
 | **P** | Page children    | Inserts `{{or: [[` _cursor_ `]](2)}}` — cursor inside the page-name brackets (depth 2)    |
 | **I** | Inline list      | Inserts `{{or: Option A \| B \| C}}` — "Option A" pre-selected, ready to type             |
@@ -143,6 +169,31 @@ When hovering over a selected `{{or:}}` component, action buttons appear:
 - **Keep (x)** — replaces the component with its current value as plain text
 - **Reset** — resets to the initial unselected state (source-backed components only)
 
+## Filtering
+
+The dropdown includes a filter input at the top. Behavior depends on the source type:
+
+- **Flat lists** (inline, attribute values, query results): standard substring filtering on each item's text.
+- **Hierarchical lists** (block-ref children, page children with nested blocks): filtering is hierarchy-aware.
+
+**Hierarchical filtering** — when the source has nested children:
+
+- **Single keyword**: items whose text contains the keyword are shown, along with all their descendants and ancestors (ancestors are displayed dimmed as context, not selectable).
+- **Multiple keywords** (space-separated): each keyword must match at a different level in the hierarchy (parent → child). The whole matching branch is shown once all keywords are covered.
+- **Exact match**: wrap a phrase in double quotes (`"exact phrase"`) to treat it as a single token.
+
+Random selection and sorting both apply to the currently filtered results.
+
+## Sorting
+
+A sort button appears next to the filter input. Click it to cycle between:
+
+- **Default order** — original order (blocks order, hierarchy for block-ref/page children, most recent first for queries)
+- **Sort by last edited** — flat list sorted by block edit time (descending)
+- **Sort alphabetically** — flat list sorted A–Z
+
+When sorting is active (date or alphabetical), hierarchy is flattened and hierarchical filtering is disabled.
+
 ## Random selection
 
 For source-backed components, a **Random** row appears at the top of the dropdown with a stepper to pick 1 or more random items:
@@ -150,6 +201,7 @@ For source-backed components, a **Random** row appears at the top of the dropdow
 - Click the Random row to select a random value
 - Use the +/- stepper to pick multiple random items (inserted as child blocks)
 - Hold Alt to force insertion as children even for single picks
+- Random applies to the currently **filtered** results, not the full list
 
 ## Auto-child output: extraction in a child block (`=` suffix)
 

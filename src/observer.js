@@ -1,15 +1,21 @@
 import {
   getBlockContent,
   isRoamReference,
+  replaceOrComponentAt,
   currentBlockAttributeName,
   getExistingValuesForAttribute,
   getPageUidByRef,
+  isQueryBlock,
+  extractQueryTitle,
+  runRoamQuery,
+  updateBlock,
 } from "./utils.js";
 import { getSetting } from "./index.js";
 import { showOptionMenu } from "./components/optionMenu.js";
 import { attachActionButtons } from "./components/actionButtons.js";
 import {
   getChildrenFromUid,
+  getItemsFromQueryResults,
   handleBlockRefOptionClick,
   handleBlockRefAddValue,
   handleOptionClick,
@@ -17,6 +23,7 @@ import {
   handleKeepOptionClick,
   handleChildOptionClick,
   handleAttrOptionClick,
+  handleQueryOptionClick,
   handlePageOptionClick,
   handlePageRefAddValue,
   handleRandomOptionClick,
@@ -26,8 +33,10 @@ import {
   PLUS_BLOCK_REF,
   PLUS_ATTR,
   PLUS_PAGE_REF,
+  PLUS_QUERY,
   SOLE_BLOCK_REF,
   SOLE_PAGE_REF,
+  QUERY_SOURCE,
   ATTR_SOURCE,
   STRIP_PAGE_REF_BRACKETS,
   HASH_BRACKET_TAG_EXACT,
@@ -191,10 +200,10 @@ function openDropdownForBlock(targetUid, orIndex, anchorElt, knownContent) {
       },
       true,
       !isAttrBlock && getSetting("showRandom") !== false
-        ? (count, altKey) => {
+        ? (count, altKey, filteredItems) => {
             handleRandomOptionClick(
               targetUid,
-              items,
+              filteredItems || items,
               count,
               altKey,
               false,
@@ -213,6 +222,88 @@ function openDropdownForBlock(targetUid, orIndex, anchorElt, knownContent) {
     return;
   }
 
+  // ── 2.5. query:((uid)) / +query:((uid)) — Roam native query source ──────
+  const queryMatch = orBody.match(PLUS_QUERY) || orBody.match(QUERY_SOURCE);
+  if (queryMatch) {
+    const queryUid = queryMatch[1];
+    runRoamQuery(queryUid).then((queryResult) => {
+      const items = getItemsFromQueryResults(
+        queryResult?.results || [],
+        !!getSetting("queryPageHeadersSelectable"),
+      );
+
+      const refresh = showOptionMenu(
+        anchorElt,
+        items,
+        (selectedItem, asRef, mode) => {
+          if (mode === "keep") {
+            const useRef =
+              asRef !== getSetting("insertAsRef") && selectedItem.uid && !isRoamReference(selectedItem.text);
+            const text = useRef
+              ? `((${selectedItem.uid}))`
+              : selectedItem.text.trim();
+            handleKeepOptionClick(targetUid, text, safeIndex);
+          } else if (mode === "child") {
+            const useRef =
+              asRef !== getSetting("insertAsRef") && selectedItem.uid && !isRoamReference(selectedItem.text);
+            handleChildOptionClick(
+              targetUid,
+              selectedItem.text,
+              useRef,
+              selectedItem.uid,
+            );
+          } else {
+            handleQueryOptionClick(
+              targetUid,
+              selectedItem,
+              queryUid,
+              asRef,
+              safeIndex,
+            );
+          }
+        },
+        false,
+        getSetting("showRandom") !== false
+          ? (count, altKey, filteredItems) => {
+              handleRandomOptionClick(
+                targetUid,
+                filteredItems || items.filter((i) => !i.isHeader),
+                count,
+                altKey,
+                false,
+                (item, asRef) =>
+                  handleQueryOptionClick(
+                    targetUid,
+                    item,
+                    queryUid,
+                    asRef,
+                    safeIndex,
+                  ),
+              );
+            }
+          : null,
+      );
+
+      // Background-load ALL results so filtering & random cover the full set
+      const initialCount = queryResult?.results?.length ?? 0;
+      const totalCount = queryResult?.total ?? initialCount;
+      console.log("[universal-selector] query initial:", initialCount, "total:", totalCount);
+      if (totalCount > initialCount) {
+        runRoamQuery(queryUid, totalCount).then((fullResult) => {
+          const fullItems = getItemsFromQueryResults(
+            fullResult?.results || [],
+            !!getSetting("queryPageHeadersSelectable"),
+          );
+          console.log("[universal-selector] full query loaded:", fullResult?.results?.length, "items");
+          // Mutate the array in-place so existing closures (filter, random) see the full set
+          items.splice(0, items.length, ...fullItems);
+          refresh();
+        });
+      }
+    });
+    return;
+  }
+
   // ── 3. +((uid))(n)= / bare ((uid))(n)= — block-ref children ──────────────
   const blockRefMatch =
     orBody.match(PLUS_BLOCK_REF) ||
@@ -223,6 +314,24 @@ function openDropdownForBlock(targetUid, orIndex, anchorElt, knownContent) {
     const autoChild = blockRefMatch[3] === "=";
     const maxDepth = parseDepth(depthSuffix);
 
+    // ── 3a. Query block auto-detect: rewrite ((uid)) → title | query:((uid)) ─
+    if (isQueryBlock(refUid)) {
+      const title = extractQueryTitle(refUid);
+      const newComponent = `{{or: ${title} | query:((${refUid}))}}`;
+      const newContent = replaceOrComponentAt(content, safeIndex, newComponent);
+      updateBlock(targetUid, newContent).then(() => {
+        // Re-trigger dropdown with the rewritten content
+        setTimeout(() => {
+          const freshAnchor =
+            document.querySelector(`.roam-block[id$="${targetUid}"]`) ||
+            anchorElt;
+          triggerOrDropdownByIndex(targetUid, safeIndex, freshAnchor, newContent);
+        }, 150);
+      });
+      return;
+    }
+
+    // ── 3b. Regular block-ref children ──────────────────────────────────
     const children = getChildrenFromUid(refUid, maxDepth);
 
     showOptionMenu(
@@ -231,16 +340,18 @@ function openDropdownForBlock(targetUid, orIndex, anchorElt, knownContent) {
       (selectedItem, asRef, mode) => {
         if (mode === "keep") {
           const useRef =
-            asRef && selectedItem.uid && !isRoamReference(selectedItem.text);
+            asRef !== getSetting("insertAsRef") && selectedItem.uid && !isRoamReference(selectedItem.text);
           const text = useRef
             ? `((${selectedItem.uid}))`
             : selectedItem.text.trim();
           handleKeepOptionClick(targetUid, text, safeIndex);
         } else if (mode === "child") {
+          const useRef =
+            asRef !== getSetting("insertAsRef") && selectedItem.uid && !isRoamReference(selectedItem.text);
           handleChildOptionClick(
             targetUid,
             selectedItem.text,
-            asRef,
+            useRef,
             selectedItem.uid,
           );
         } else if (mode === "add") {
@@ -267,10 +378,10 @@ function openDropdownForBlock(targetUid, orIndex, anchorElt, knownContent) {
       },
       true,
       getSetting("showRandom") !== false
-        ? (count, altKey) => {
+        ? (count, altKey, filteredItems) => {
             handleRandomOptionClick(
               targetUid,
-              children,
+              filteredItems || children,
               count,
               altKey,
               false,
@@ -310,16 +421,18 @@ function openDropdownForBlock(targetUid, orIndex, anchorElt, knownContent) {
       (selectedItem, asRef, mode) => {
         if (mode === "keep") {
           const useRef =
-            asRef && selectedItem.uid && !isRoamReference(selectedItem.text);
+            asRef !== getSetting("insertAsRef") && selectedItem.uid && !isRoamReference(selectedItem.text);
           const text = useRef
             ? `((${selectedItem.uid}))`
             : selectedItem.text.trim();
           handleKeepOptionClick(targetUid, text, safeIndex);
         } else if (mode === "child") {
+          const useRef =
+            asRef !== getSetting("insertAsRef") && selectedItem.uid && !isRoamReference(selectedItem.text);
           handleChildOptionClick(
             targetUid,
             selectedItem.text,
-            asRef,
+            useRef,
             selectedItem.uid,
           );
         } else if (mode === "add") {
@@ -347,10 +460,10 @@ function openDropdownForBlock(targetUid, orIndex, anchorElt, knownContent) {
       },
       true,
       getSetting("showRandom") !== false
-        ? (count, altKey) => {
+        ? (count, altKey, filteredItems) => {
             handleRandomOptionClick(
               targetUid,
-              children,
+              filteredItems || children,
               count,
               altKey,
               false,
@@ -402,10 +515,10 @@ function openDropdownForBlock(targetUid, orIndex, anchorElt, knownContent) {
     },
     true,
     getSetting("showRandom") !== false
-      ? (count, altKey) => {
+      ? (count, altKey, filteredItems) => {
           handleRandomOptionClick(
             targetUid,
-            items,
+            filteredItems || items,
             count,
             altKey,
             false,
@@ -425,10 +538,42 @@ function openDropdownForBlock(targetUid, orIndex, anchorElt, knownContent) {
   );
 }
 
+function maybeRewriteQueryRef(elt) {
+  const block = elt.closest(".roam-block");
+  if (!block) return;
+  const targetUid = block.id.slice(-9);
+  const content = getBlockContent(targetUid);
+  if (!content) return;
+
+  const allOrMatches = [...content.matchAll(OR_COMPONENT_GLOBAL_CAPTURE)];
+  const allOptionElts = Array.from(block.getElementsByClassName("rm-option"));
+  const orIndex = allOptionElts.indexOf(elt);
+  if (orIndex < 0 || orIndex >= allOrMatches.length) return;
+
+  const orBody = allOrMatches[orIndex][1];
+  // Only rewrite bare ((uid)) or sole ((uid)) that is a query block
+  const blockRefMatch =
+    orBody.match(PLUS_BLOCK_REF) ||
+    (!orBody.includes("|") && orBody.match(SOLE_BLOCK_REF));
+  if (!blockRefMatch) return;
+
+  const refUid = blockRefMatch[1];
+  if (!isQueryBlock(refUid)) return;
+
+  // Rewrite to query syntax immediately
+  const title = extractQueryTitle(refUid);
+  const newComponent = `{{or: ${title} | query:((${refUid}))}}`;
+  const newContent = replaceOrComponentAt(content, orIndex, newComponent);
+  updateBlock(targetUid, newContent);
+}
+
 function attachOptionListeners(optionElts) {
   optionElts.forEach((elt) => {
     if (elt.dataset.orListenerAttached) return;
     elt.dataset.orListenerAttached = "true";
+
+    // Auto-rewrite query block references immediately on render
+    maybeRewriteQueryRef(elt);
 
     attachActionButtons(elt);
 

@@ -4,18 +4,19 @@
  * Simple list mode: "Keep value only" (✕) only
  */
 
-import { getBlockContent, replaceOrComponentAt, updateBlock } from "../utils.js";
+import { getBlockContent, replaceOrComponentAt, updateBlock, extractQueryTitle } from "../utils.js";
 import {
   OR_COMPONENT_GLOBAL_CAPTURE,
   PLUS_BLOCK_REF,
   PLUS_PAGE_REF,
   PLUS_ATTR,
+  PLUS_QUERY,
 } from "../regex.js";
 
 // Matches a selected-state or-component that carries a +source reference.
 // Group 1: the selected value (before the pipe)
-// Group 2: the full +source token (after the pipe), e.g. "+((uid))(2)", "+[[page]]", "+attr:[[name]]"
-const SOURCE_BACKED_OR = /\{\{or:\s*(.+?)\s*\|\s*(\+(?:\(\([a-zA-Z0-9_-]{9}\)\)(?:\(\d+\))?|\[\[.*?\]\](?:\(\d+\))?|attr:(?:\[\[.*?\]\]|[^\|\}\s]+?))=?)\s*\}\}/;
+// Group 2: the full +source token (after the pipe), e.g. "+((uid))(2)", "+[[page]]", "+attr:[[name]]", "+query:((uid))"
+const SOURCE_BACKED_OR = /\{\{or:\s*(.+?)\s*\|\s*(\+(?:query:\(\([a-zA-Z0-9_-]{9}\)\)|\(\([a-zA-Z0-9_-]{9}\)\)(?:\(\d+\))?|\[\[.*?\]\](?:\(\d+\))?|attr:(?:\[\[.*?\]\]|[^\|\}\s]+?))=?)\s*\}\}/;
 
 export function attachActionButtons(optionElt) {
   const wrapper = optionElt.closest(".rm-or-select");
@@ -104,6 +105,10 @@ async function resetOption(targetUid, orIndex, sourceToken) {
     newComponent = `{{or: ${bareSource}}}`;
   } else if (PLUS_ATTR.test(sourceToken)) {
     newComponent = `{{or: ${bareSource}}}`;
+  } else if (PLUS_QUERY.test(sourceToken)) {
+    const queryUid = sourceToken.match(PLUS_QUERY)[1];
+    const title = extractQueryTitle(queryUid);
+    newComponent = `{{or: ${title} | query:((${queryUid}))}}`;
   } else {
     return;
   }
